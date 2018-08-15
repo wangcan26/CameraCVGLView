@@ -33,7 +33,7 @@ static const GLfloat kTriangleVertices[] = { -1.0f, -1.0f, -1.0f, 1.0f,
 
 static const GLfloat kUvs[] = {1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0};
 
-static const GLfloat kUvs_flip[] = {0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0};
+static const GLfloat kUvs_flip[] = {0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0};
 
 static const GLushort kIndices[] = {0, 3, 1, 1, 3, 2};
 

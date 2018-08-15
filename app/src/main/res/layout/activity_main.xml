@@ -6,9 +6,20 @@
     android:layout_height="match_parent"
     tools:context="com.nvision.facetracker.MainActivity">
 
-    <com.nvision.facetracker.CameraRenderView
+    <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/camera_view"/>
+        android:layout_height="match_parent">
+
+        <com.nvision.facetracker.CameraRenderView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:id="@+id/camera_view"/>
+
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/image_view"
+            />
+    </RelativeLayout>
 
 </android.support.constraint.ConstraintLayout>

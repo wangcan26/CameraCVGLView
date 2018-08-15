@@ -15,6 +15,10 @@ extern "C" {
     JNIEXPORT jobject JNICALL NATIVE_METHOD(nativeSurfaceTexture)(JNIEnv* jenv, jobject obj, jboolean flip);
     JNIEXPORT void JNICALL NATIVE_METHOD(nativeDestroyTexture)(JNIEnv* jenv, jobject obj);
     JNIEXPORT void JNICALL NATIVE_METHOD(nativeRequestUpdateTexture)(JNIEnv* jenv, jobject obj);
+
+    JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject obj, jint width, jint height, jbyteArray data);
+    JNIEXPORT void JNICALL NATIVE_METHOD(nativeTestIMage)(JNIEnv* jenv, jobject obj, jobject bitmap);
+
 }
 
 #endif //JNIAPI_H_

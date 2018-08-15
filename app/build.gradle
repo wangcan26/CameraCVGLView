@@ -9,9 +9,13 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters 'armeabi-v7a'
+        }
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++11"
+                arguments '-DANDROID_TOOLCHAIN=clang','-DANDROID_STL=gnustl_static'
             }
         }
     }

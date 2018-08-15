@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <thread>
 #include <android/native_window.h>
 

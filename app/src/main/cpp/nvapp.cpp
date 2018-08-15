@@ -1,10 +1,12 @@
 #include "nvapp.h"
 #include "nvrenderer.h"
+#include "nvtracker.h"
 
 namespace nv
 {
     NVApp::NVApp():
-            renderer_(0)
+            renderer_(0),
+            tracker_(0)
     {
 
     }
@@ -16,6 +18,9 @@ namespace nv
     void NVApp::Init() {
         renderer_ = new render::NVRenderer();
         CreateGLThread();
+
+        tracker_ = new tracker::NVTracker();
+        CreateTrackerThread();
     }
 
     void NVApp::Resume() {
@@ -43,11 +48,23 @@ namespace nv
             renderer_ = 0;
         }
 
+        if(tracker_ != 0)
+        {
+            tracker()->Destroy();
+            DestroyTrackerThread();
+            delete  tracker_;
+            tracker_ = 0;
+        }
+
     }
 
     render::NVRenderer *NVApp::Render()
     {
         return renderer_;
+    }
+
+    tracker::NVTracker* NVApp::tracker() {
+        return tracker_;
     }
 
     void NVApp::CreateGLThread() {
@@ -64,6 +81,25 @@ namespace nv
                 gl_thread_.join();
         }
     }
+
+    void NVApp::CreateTrackerThread() {
+        if(tracker_ != 0)
+        {
+            tracker_thread_ = std::thread(&tracker::NVTracker::_Run, tracker_);
+        }
+    }
+
+    void NVApp::DestroyTrackerThread() {
+        if(tracker_ != 0)
+        {
+            if(tracker_thread_.joinable())
+            {
+                tracker_thread_.join();
+            }
+        }
+    }
+
+
 
 
 }

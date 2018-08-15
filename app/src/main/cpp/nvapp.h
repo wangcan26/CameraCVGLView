@@ -9,6 +9,12 @@ namespace nv
     {
         class NVRenderer;
     }
+
+    namespace tracker
+    {
+        class NVTracker;
+    }
+
     class NVApp{
     public:
         NVApp();
@@ -24,16 +30,21 @@ namespace nv
         void Deinit();
 
         render::NVRenderer *Render();
+        tracker::NVTracker *tracker();
 
     protected:
         void CreateGLThread();
-
         void DestroyGLThread();
+
+        void CreateTrackerThread();
+        void DestroyTrackerThread();
 
     private:
         render::NVRenderer *renderer_;
+        tracker::NVTracker *tracker_;
 
         std::thread    gl_thread_;
+        std::thread    tracker_thread_;
 
     };
 }

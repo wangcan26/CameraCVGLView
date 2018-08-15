@@ -1,0 +1,1 @@
+add_library(cpu-features STATIC ${ANDROID_NDK}/sources/android/cpufeatures/cpu-features.c)

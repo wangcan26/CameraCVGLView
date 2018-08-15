@@ -7,9 +7,13 @@ import android.content.Context;
 import android.content.pm.ConfigurationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
+import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -25,22 +29,33 @@ import android.media.ImageReader;
 import android.media.VolumeShaper;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.v4.content.ContextCompat;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.Size;
+import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.WindowManager;
+import android.widget.ImageView;
 
+import com.nvision.face_tracker_android.R;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -63,10 +78,24 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private Surface             mSurface;
     private SurfaceTexture      mSurfaceTexture;
     private volatile Handler    //Create a handler from the ui thread
-            mUIHandler = new Handler();
+            mUIHandler = new Handler(Looper.getMainLooper());
     private Semaphore           mCameraOpenCloseLock = new Semaphore(1);
     private HandlerThread       mCamSessionThread;
     private Handler             mCamSessionHandler;
+
+    private HandlerThread       mImageSessionThread;
+    private Handler             mImageSessionHandler;
+
+    // Durations in nanoseconds
+    private static final long MICRO_SECOND = 1000;
+    private static final long MILLI_SECOND = MICRO_SECOND * 1000;
+    private static final long ONE_SECOND = MILLI_SECOND * 1000;
+
+    private Bitmap              mBitmap;
+    private Object              mLock = new Object();
+    private HandlerThread       mImageThread;
+    private Handler             mImageHandler;
+    private static final int    MSG_IMAGE_PROCESS = 0;
 
     private int                 mSensorOrientation;
     private static final int MAX_PREVIEW_WIDTH = 1920;
@@ -75,9 +104,19 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private Size                mPreviewSize;
     private int mWidth, mHeight;
 
+
     public static int IMAGE_WIDTH = 640, IMAGE_HEIGHT= 480;
     public static final String CAMERA_FACE_BACK = "" + CameraCharacteristics.LENS_FACING_BACK;
     public static final String CAMERA_FACE_FRONT = "" + CameraCharacteristics.LENS_FACING_FRONT;
+
+    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+    static {
+        ORIENTATIONS.append(Surface.ROTATION_0, 270);
+        ORIENTATIONS.append(Surface.ROTATION_90, 0);
+        ORIENTATIONS.append(Surface.ROTATION_180, 0);
+        ORIENTATIONS.append(Surface.ROTATION_180, 270);
+        ORIENTATIONS.append(Surface.ROTATION_270, 180);
+    }
 
     //CameraDevice StateCallback
     private CameraDevice.StateCallback mCameraDeviceCallback = new CameraDevice.StateCallback() {
@@ -112,15 +151,18 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
             if(null == mCamera) return;
 
-
             mCaptureSession = cameraCaptureSession;
             try{
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
                 //mPreviewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
                 mPreviewBuilder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON);
                 mPreviewBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, 1600);
+                mPreviewBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, ONE_SECOND/30);
                 //mPreviewBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
 
+                //int rotation = ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
+                //Log.i("CameraRenderView", "CameraRenderView CameraCaptureSession " + rotation);
+                //mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
                 startPreview(mCaptureSession);
             }catch (CameraAccessException e){
                 e.printStackTrace();
@@ -153,15 +195,15 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     };
 
     private long last_time = System.currentTimeMillis();
+    private int  duration_time = 0;
+    private int  frame_number = 0;
     //This is a callback object for ImageReader OnImageAvailble will be called when a still image is ready for process
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader imageReader) {
-            long cur_time = System.currentTimeMillis();
-            //Log.i("CameraRenderView", "CameraRenderView OnImageAvailable Since last time " + (cur_time - last_time));
-            Image image = imageReader.acquireNextImage();
-            last_time = cur_time;
-            image.close();
+
+            Message msg = mImageHandler.obtainMessage(MSG_IMAGE_PROCESS, imageReader);
+            mImageHandler.sendMessage(msg);
 
         }
     };
@@ -189,6 +231,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         mIsSurfaceAvailable = false;
 
+        //Create Image Worker thread
+        startImageWorkerThread();
+
         //Create a App
         nativeCreateApp();
     }
@@ -212,11 +257,39 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         nativeDestroyTexture();
         nativeDestroyApp();
+
+        stopImageWorkerThread();
     }
 
+    //Call in a thread that different from ImageReader Callback
+    public void testMat(final ImageView imageView)
+    {
+        synchronized (mLock)
+        {
+            if(duration_time > MICRO_SECOND)
+            {
+                final Bitmap bitmap = Bitmap.createBitmap(IMAGE_HEIGHT, IMAGE_WIDTH, Bitmap.Config.ARGB_8888);
+                nativeTestIMage(bitmap);
+                getActivity().runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Log.i("MainActivity", "MainActivity onCreate mImageView set ImageBitmap");
+                        imageView.setImageBitmap(bitmap);
+                    }
+                });
+
+                float fps = (float)MICRO_SECOND/frame_number;
+                Log.i("CameraRenderView", "CameraRenderView ImageReader imageToByteArray2 " + fps);
+                frame_number = 0;
+                duration_time = 0;
+            }
+        }
+
+    }
 
     @Override
     public void surfaceCreated(SurfaceHolder surfaceHolder) {
+
     }
 
     @Override
@@ -240,6 +313,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         mCamSessionThread = new HandlerThread("Camera2");
         mCamSessionThread.start();
         mCamSessionHandler = new Handler(mCamSessionThread.getLooper());
+
     }
 
     private void stopCameraSessionThread()
@@ -249,6 +323,58 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mCamSessionThread.join();
             mCamSessionThread = null;
             mCamSessionHandler = null;
+        }catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void startImageWorkerThread()
+    {
+
+        mImageSessionThread = new HandlerThread("ImageSession");
+        mImageSessionThread.start();
+        mImageSessionHandler = new Handler(mImageSessionThread.getLooper());
+
+        mImageThread = new HandlerThread("ImageProcess");
+        mImageThread.start();
+        mImageHandler = new Handler(mImageThread.getLooper(), new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message message) {
+                switch (message.what){
+                    case MSG_IMAGE_PROCESS:
+                        last_time = System.currentTimeMillis();
+                        Log.i("CameraRenderView", "Image Worker Process Image");
+                        ImageReader imageReader = (ImageReader) message.obj;
+                        Image image = imageReader.acquireLatestImage();
+
+                        imageToYBytes(image);
+                        image.close();
+                        mImageHandler.removeMessages(MSG_IMAGE_PROCESS);
+
+                        long cur_time = System.currentTimeMillis();
+                        Log.i("CameraRenderView", "CameraRenderView Process Time one Frame: " + (cur_time-last_time));
+
+                        //Compute the fps
+                        synchronized (mLock)
+                        {
+                            duration_time += (cur_time-last_time);
+                            frame_number++;
+                        }
+                        break;
+                }
+                return false;
+            }
+        });
+    }
+
+    private void stopImageWorkerThread()
+    {
+        mImageThread.quitSafely();
+        try{
+            mImageThread.join();
+            mImageThread = null;
+            mImageHandler = null;
         }catch (InterruptedException e)
         {
             e.printStackTrace();
@@ -280,15 +406,15 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             //Set Surface of SurfaceView as the target of the builder
             mPreviewBuilder.addTarget(surface);
             mPreviewBuilder.addTarget(mImageReader.getSurface());
-            mCamera.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()), mSessionStateCallback,null);
+            mCamera.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()), mSessionStateCallback, mCamSessionHandler);
         }catch (CameraAccessException e)
         {
             e.printStackTrace();
         }
     }
 
-    private  void startPreview(CameraCaptureSession session) throws CameraAccessException{
-        session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler);
+    private  void startPreview(final CameraCaptureSession session) throws CameraAccessException{
+        session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mUIHandler);
     }
 
 
@@ -363,7 +489,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
             mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
 
-            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);
+            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mImageSessionHandler);
 
             //Find out if we need to swap dimension to get the preview size relative to sensor coordinate
             int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
@@ -472,6 +598,303 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }
     }
 
+    //http://www.mclover.cn/blog/index.php/archives/206.html
+    private static Bitmap imageToBitmap(Image image)
+    {
+        Log.i("CameraRenderView", "CameraRenderView imageToBitmap begin");
+        ByteArrayOutputStream outputBytes = new ByteArrayOutputStream();
+
+        ByteBuffer bufferY = image.getPlanes()[0].getBuffer();
+        byte[] data0 = new byte[bufferY.remaining()];
+        bufferY.get(data0);
+
+        ByteBuffer bufferU = image.getPlanes()[1].getBuffer();
+        byte[] data1 = new byte[bufferU.remaining()];
+        bufferU.get(data1);
+
+        ByteBuffer bufferV = image.getPlanes()[2].getBuffer();
+        byte[] data2 = new byte[bufferV.remaining()];
+        bufferV.get(data2);
+
+        try {
+            outputBytes.write(data0);
+            outputBytes.write(data2);
+            outputBytes.write(data1);
+        }catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+        Log.i("CameraRenderView", "CameraRenderView YUV convert jpeg begin " + image.getWidth() + " " + image.getHeight());
+
+        //Convert YUV to Jpeg
+        final YuvImage yuvImage = new YuvImage(outputBytes.toByteArray(), ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
+        ByteArrayOutputStream outBitmap = new ByteArrayOutputStream();
+
+        yuvImage.compressToJpeg(new Rect(0, 0, image.getWidth(), image.getHeight()), 95, outBitmap);
+        Bitmap bitmap = BitmapFactory.decodeByteArray(outBitmap.toByteArray(), 0, outBitmap.size());
+
+        Log.i("CameraRenderView", "CameraRenderView YUV convert jpeg end");
+
+        return bitmap;
+    }
+
+    private static void imageToYBytes(Image image)
+    {
+        Rect crop = image.getCropRect();
+        int format = image.getFormat();
+        int width = crop.width();
+        int height = crop.height();
+
+        Image.Plane[] planes = image.getPlanes();
+        byte[] data = new byte[width * height];// * ImageFormat.getBitsPerPixel(format) / 8
+        byte[] rowData = new byte[planes[0].getRowStride()];
+
+        int channelOffset = 0;
+        int outputStride = 1;
+        // only yuv
+        channelOffset = 0;
+        outputStride = 1;
+
+        ByteBuffer buffer = planes[0].getBuffer();
+        int rowStride = planes[0].getRowStride();
+        int pixelStride = planes[0].getPixelStride();
+
+        int w = width;
+        int h = height;
+        //offset of the yuv plane
+        buffer.position(rowStride * (crop.top) + pixelStride * (crop.left));
+        //TODO: RenderScript
+        for (int row = 0; row < h-1; row++) {
+            int length;
+
+            length = w;
+            buffer.get(data, channelOffset, length);
+            channelOffset += length;
+
+            buffer.position(buffer.position() + rowStride - length);
+        }
+        //row = h-1
+        buffer.get(data, channelOffset, w);
+
+
+        data = rotateYDegree90(data, width, height);
+        //Log.i("CameraRenderView", "CameraRenderView image width-height : " + image.getWidth() + " " + image.getHeight());
+
+        nativeProcessImage(height, width, data);
+    }
+
+    //https://www.polarxiong.com/archives/Android-YUV_420_888%E7%BC%96%E7%A0%81Image%E8%BD%AC%E6%8D%A2%E4%B8%BAI420%E5%92%8CNV21%E6%A0%BC%E5%BC%8Fbyte%E6%95%B0%E7%BB%84.html
+    private static void imageToByteArray2(Image image) {
+        Rect crop = image.getCropRect();
+        int format = image.getFormat();
+        int width = crop.width();
+        int height = crop.height();
+
+        Image.Plane[] planes = image.getPlanes();
+        byte[] data = new byte[width * height* ImageFormat.getBitsPerPixel(format) / 8];//
+        byte[] rowData = new byte[planes[0].getRowStride()];
+
+        int channelOffset = 0;
+        int outputStride = 1;
+        // only yuv
+        for (int i = 0; i < planes.length; i++) {
+            switch (i) {
+                case 0:
+                    channelOffset = 0;
+                    outputStride = 1;
+                    break;
+                case 1:
+                    channelOffset = width * height;
+                    outputStride = 1;
+                    break;
+                case 2:
+                    channelOffset = (int) (width * height * 1.25);
+                    outputStride = 1;
+                    break;
+            }
+
+            ByteBuffer buffer = planes[i].getBuffer();
+            int rowStride = planes[i].getRowStride();
+            int pixelStride = planes[i].getPixelStride();
+
+            int shift = (i == 0) ? 0 : 1;
+            int w = width >> shift;
+            int h = height >> shift;
+            buffer.position(rowStride * (crop.top >> shift) + pixelStride * (crop.left >> shift));
+
+            for (int row = 0; row < h; row++) {
+                int length;
+                if (pixelStride == 1 && outputStride == 1) {
+                    length = w;
+                    buffer.get(data, channelOffset, length);
+                    channelOffset += length;
+                } else {
+                    length = (w - 1) * pixelStride + 1;
+                    buffer.get(rowData, 0, length);
+                    for (int col = 0; col < w; col++) {
+                        data[channelOffset] = rowData[col * pixelStride];
+                        channelOffset += outputStride;
+                    }
+                }
+                if (row < h - 1) {
+                    buffer.position(buffer.position() + rowStride - length);
+                }
+            }
+        }
+
+        data = rotateYUV420Degree90(data, width, height);
+        //Log.i("CameraRenderView", "CameraRenderView image width-height : " + image.getWidth() + " " + image.getHeight());
+
+        nativeProcessImage(width, height, data);
+    }
+
+
+    private static void imageToByteArray(Image image) {
+        ByteBuffer buffer;
+        int rowStride;
+        int pixelStride;
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int offset = 0;
+
+        Image.Plane[] planes = image.getPlanes();
+        byte[] data = new byte[image.getWidth() * image.getHeight() * ImageFormat.getBitsPerPixel(ImageFormat.YUV_420_888) / 8];
+        byte[] rowData = new byte[planes[0].getRowStride()];
+
+        for (int i = 0; i < planes.length; i++) {
+            buffer = planes[i].getBuffer();
+            rowStride = planes[i].getRowStride();
+            pixelStride = planes[i].getPixelStride();
+            int w = (i == 0) ? width : width / 2;
+            int h = (i == 0) ? height : height / 2;
+            for (int row = 0; row < h; row++) {
+                int bytesPerPixel = ImageFormat.getBitsPerPixel(ImageFormat.YUV_420_888) / 8;
+                if (pixelStride == bytesPerPixel) {
+                    int length = w * bytesPerPixel;
+                    buffer.get(data, offset, length);
+
+                    // Advance buffer the remainder of the row stride, unless on the last row.
+                    // Otherwise, this will throw an IllegalArgumentException because the buffer
+                    // doesn't include the last padding.
+                    if (h - row != 1) {
+                        buffer.position(buffer.position() + rowStride - length);
+                    }
+                    offset += length;
+                } else {
+
+                    // On the last row only read the width of the image minus the pixel stride
+                    // plus one. Otherwise, this will throw a BufferUnderflowException because the
+                    // buffer doesn't include the last padding.
+                    if (h - row == 1) {
+                        buffer.get(rowData, 0, width - pixelStride + 1);
+                    } else {
+                        buffer.get(rowData, 0, rowStride);
+                    }
+
+                    for (int col = 0; col < w; col++) {
+                        data[offset++] = rowData[col * pixelStride];
+                    }
+                }
+            }
+        }
+
+
+        nativeProcessImage(width, height, data);
+    }
+
+
+    public static byte[] rotateYUV420Degree270(byte[] data, int imageWidth,
+                                               int imageHeight) {
+        byte[] yuv = new byte[imageWidth * imageHeight * 3 / 2];
+        int nWidth = 0, nHeight = 0;
+        int wh = 0;
+        int uvHeight = 0;
+        if (imageWidth != nWidth || imageHeight != nHeight) {
+            nWidth = imageWidth;
+            nHeight = imageHeight;
+            wh = imageWidth * imageHeight;
+            uvHeight = imageHeight >> 1;// uvHeight = height / 2
+        }
+        // ??Y
+        int k = 0;
+        for (int i = 0; i < imageWidth; i++) {
+            int nPos = 0;
+            for (int j = 0; j < imageHeight; j++) {
+                yuv[k] = data[nPos + i];
+                k++;
+                nPos += imageWidth;
+            }
+        }
+        for (int i = 0; i < imageWidth; i += 2) {
+            int nPos = wh;
+            for (int j = 0; j < uvHeight; j++) {
+                yuv[k] = data[nPos + i];
+                yuv[k + 1] = data[nPos + i + 1];
+                k += 2;
+                nPos += imageWidth;
+            }
+        }
+        return rotateYUV420Degree180(yuv, imageWidth, imageHeight);
+    }
+
+    private static byte[] rotateYUV420Degree180(byte[] data, int imageWidth, int imageHeight) {
+        byte[] yuv = new byte[imageWidth * imageHeight * 3 / 2];
+        int i = 0;
+        int count = 0;
+        for (i = imageWidth * imageHeight - 1; i >= 0; i--) {
+            yuv[count] = data[i];
+            count++;
+        }
+        i = imageWidth * imageHeight * 3 / 2 - 1;
+        for (i = imageWidth * imageHeight * 3 / 2 - 1; i >= imageWidth
+                * imageHeight; i -= 2) {
+            yuv[count++] = data[i - 1];
+            yuv[count++] = data[i];
+        }
+        return yuv;
+    }
+
+    public static byte[] rotateYDegree90(byte[] data, int imageWidth, int imageHeight) {
+        byte[] yuv = new byte[imageWidth * imageHeight]; // * 3 / 2
+        // Rotate the Y luma
+        int i = 0;
+        //TODO: RenderScript
+        for (int x = 0; x < imageWidth; x++) {
+            for (int y = imageHeight - 1; y >= 0; y--) {
+                yuv[i] = data[y * imageWidth + x];
+                i++;
+            }
+        }
+        return yuv;
+    }
+
+    public static byte[] rotateYUV420Degree90(byte[] data, int imageWidth, int imageHeight) {
+        byte[] yuv = new byte[imageWidth * imageHeight * 3 / 2]; //
+        // Rotate the Y luma
+        int i = 0;
+        for (int x = 0; x < imageWidth; x++) {
+            for (int y = imageHeight - 1; y >= 0; y--) {
+                yuv[i] = data[y * imageWidth + x];
+                i++;
+            }
+        }
+        // Rotate the U and V color components
+        i = imageWidth * imageHeight * 3 / 2 - 1;
+        for (int x = imageWidth - 1; x > 0; x = x - 2) {
+            for (int y = 0; y < imageHeight / 2; y++) {
+                yuv[i] = data[(imageWidth * imageHeight) + (y * imageWidth) + x];
+                i--;
+                yuv[i] = data[(imageWidth * imageHeight) + (y * imageWidth)
+                        + (x - 1)];
+                i--;
+            }
+        }
+        return yuv;
+    }
+
+
+
+
 
     static class CompareSizesByArea implements Comparator<Size>{
         @Override
@@ -489,4 +912,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     static native SurfaceTexture nativeSurfaceTexture(boolean flip);
     static native void nativeRequestUpdateTexture();
     static native void nativeDestroyTexture();
+
+    static native void nativeProcessImage(int width, int height, byte[] data);
+    static native void nativeTestIMage(Bitmap bitmap);
 }
