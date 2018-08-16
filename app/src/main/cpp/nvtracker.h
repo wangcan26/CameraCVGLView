@@ -17,6 +17,14 @@ namespace nv
 
             ~NVTracker();
 
+            void Resume();
+
+            void Pause();
+
+            void NotifyCameraReady();
+
+            void NotifyCameraIdle();
+
             bool PushImage(int width, int height, unsigned char* buf, bool block_caller);
 
             bool PopImage(cv::Mat& result);
@@ -36,6 +44,12 @@ namespace nv
 
             enum TrackerMessage msg_;
 
+            std::mutex pc_mut_;
+            std::condition_variable push_cond_, pop_cond_;
+
+            std::mutex tl_mut_;
+            std::condition_variable tl_cond_;
+
             cv::Mat mat_list_[2];
             int     image_index_;
 
@@ -43,11 +57,12 @@ namespace nv
             bool is_push_;
             bool is_pop_;
 
+            bool       cam_configured_;
+
             int     width_;
             int     height_;
 
-            std::mutex mut_;
-            std::condition_variable push_cond_, pop_cond_;
+
 
             unsigned char* buf_;
         };

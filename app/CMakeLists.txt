@@ -106,4 +106,5 @@ target_link_libraries( # Specifies the target library.
                        ${OPENCV_THIRD_LIBS}
                        cpu-features
                        z
+                       m
                        )

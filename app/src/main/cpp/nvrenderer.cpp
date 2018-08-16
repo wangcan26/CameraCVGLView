@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <thread>
+#include <chrono>
 #include <android/native_window.h>
 
 #include "nvrenderer.h"
@@ -62,9 +63,9 @@ namespace nv
                 msg_ = MSG_WINDOW_CREATE;
 
                 //Block the UI thread
-                std::unique_lock<std::mutex> lk(mut_);
-                cond_.wait(lk);
-                lk.unlock();
+                std::unique_lock<std::mutex> win_lk(win_mut_);
+                win_cond_.wait(win_lk);
+                win_lk.unlock();
                 LOG_INFO("nv log renderer unblock ui thread");
             }else{
                 msg_ = MSG_WINDOW_DESTROY;
@@ -166,13 +167,25 @@ namespace nv
 
             //surfaceTexture Id Used for rendering camera preview
             CreateSurfaceTextureId();
+            //Notify ui thread to go
+            std::unique_lock<std::mutex> win_lk(win_mut_);
+            win_cond_.notify_one();
+            win_lk.unlock();
+
+            //Wait for camera session ready
+            LOG_INFO("nv log renderer initialise wait for camera ready");
+            std::unique_lock<std::mutex> gl_lk(gl_mut_);
+            gl_cond_.wait(gl_lk);
+            gl_lk.unlock();
+            LOG_INFO("nv log renderer initialise wait for camera ready end");
+
             //Create camera background
             cam_background_ = new NVCameraBackground(this);
 
             msg_ = MSG_NONE;
 
-            std::lock_guard<std::mutex> lk(mut_);
-            cond_.notify_one();
+
+
             return true;
         }
 
@@ -194,6 +207,11 @@ namespace nv
 
         void NVRenderer::FlipBackground(bool flip) {
             flip_background_ = flip;
+        }
+
+        void NVRenderer::NotifyCameraReady() {
+            std::lock_guard<std::mutex> gl_lk(gl_mut_);
+            gl_cond_.notify_one();
         }
 
         bool NVRenderer::WindowRestore() {
@@ -354,6 +372,7 @@ namespace nv
 
 
         void NVRenderer::_renderLoop() {
+            //A little later than camerasession thread
             bool run = true;
             while(run)
             {
@@ -366,7 +385,6 @@ namespace nv
                             {
                                 run = false;
                             }
-
                         }else{
                             if(WindowRestore())
                             {
@@ -386,6 +404,8 @@ namespace nv
                     default:
                         break;
                 }
+
+
 
                 if(window_init_ && !pause_)
                 {

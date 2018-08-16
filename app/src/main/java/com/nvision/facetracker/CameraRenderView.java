@@ -59,6 +59,8 @@ import java.util.Objects;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import static com.nvision.facetracker.MainActivity.MSG_TEST_MAT;
+
 
 public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callback{
 
@@ -130,6 +132,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             {
                 e.printStackTrace();
             }
+
+
         }
 
         @Override
@@ -150,20 +154,20 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
             if(null == mCamera) return;
-
             mCaptureSession = cameraCaptureSession;
             try{
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                //mPreviewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+                mPreviewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
                 mPreviewBuilder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON);
-                mPreviewBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, 1600);
+                mPreviewBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, 0);
                 mPreviewBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, ONE_SECOND/30);
-                //mPreviewBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
+                mPreviewBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
 
                 //int rotation = ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
                 //Log.i("CameraRenderView", "CameraRenderView CameraCaptureSession " + rotation);
                 //mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
                 startPreview(mCaptureSession);
+
             }catch (CameraAccessException e){
                 e.printStackTrace();
             }
@@ -181,6 +185,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
             //Log.i("CameraRenderView","CameraCaptureSession Capture Completed");
+
         }
 
         @Override
@@ -203,7 +208,14 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         public void onImageAvailable(ImageReader imageReader) {
 
             Message msg = mImageHandler.obtainMessage(MSG_IMAGE_PROCESS, imageReader);
-            mImageHandler.sendMessage(msg);
+
+            if(mImageHandler != null)
+            {
+                mImageHandler.sendMessage(msg);
+            }else{
+                imageReader.acquireLatestImage().close();
+            }
+
 
         }
     };
@@ -231,9 +243,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         mIsSurfaceAvailable = false;
 
-        //Create Image Worker thread
-        startImageWorkerThread();
-
         //Create a App
         nativeCreateApp();
     }
@@ -243,53 +252,70 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         startCameraSessionThread();
         if(isSurfaceAvailable()) openCamera();
         else mSurfaceHolder.addCallback(this);
+
+        startImageWorkerThread();
+
         nativeResumeApp();
     }
 
     public void onPause()
     {
+
+        Log.i("CameraRenderView", "CameraRenderView Pause .....");
+        nativePauseApp();
         closeCamera();
         stopCameraSessionThread();
-        nativePauseApp();
-    }
 
-    public void deinit()
-    {
-        nativeDestroyTexture();
-        nativeDestroyApp();
+        if(mSurfaceTexture != null)
+        {
+            mSurfaceTexture.release();
+            mSurfaceTexture.setOnFrameAvailableListener(null);
+            nativeDestroyTexture();
+            mSurfaceTexture = null;
+        }
 
         stopImageWorkerThread();
     }
 
-    //Call in a thread that different from ImageReader Callback
-    public void testMat(final ImageView imageView)
+    public void deinit()
     {
-        synchronized (mLock)
+        nativeDestroyApp();
+    }
+
+    //Call in a thread that different from ImageReader Callback
+    public void testMat(final ImageView imageView, Handler handler)
+    {
+        /*synchronized (mLock)
         {
             if(duration_time > MICRO_SECOND)
             {
-                final Bitmap bitmap = Bitmap.createBitmap(IMAGE_HEIGHT, IMAGE_WIDTH, Bitmap.Config.ARGB_8888);
-                nativeTestIMage(bitmap);
-                getActivity().runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Log.i("MainActivity", "MainActivity onCreate mImageView set ImageBitmap");
-                        imageView.setImageBitmap(bitmap);
-                    }
-                });
+
 
                 float fps = (float)MICRO_SECOND/frame_number;
                 Log.i("CameraRenderView", "CameraRenderView ImageReader imageToByteArray2 " + fps);
                 frame_number = 0;
                 duration_time = 0;
             }
-        }
+        }*/
+        final Bitmap bitmap = Bitmap.createBitmap(IMAGE_HEIGHT, IMAGE_WIDTH, Bitmap.Config.ARGB_8888);
+        nativeTestIMage(bitmap);
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Log.i("MainActivity", "MainActivity onCreate mImageView set ImageBitmap");
+                imageView.setImageBitmap(bitmap);
+            }
+        });
+
 
     }
 
     @Override
     public void surfaceCreated(SurfaceHolder surfaceHolder) {
-
+        if(mIsSurfaceAvailable)
+        {
+            openCamera();
+        }
     }
 
     @Override
@@ -300,11 +326,11 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         //This method may block the ui thread until the gl context and surface texture id created
         nativeSetSurface(surfaceHolder.getSurface());
         mIsSurfaceAvailable = true;
-
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
+        Log.i("CameraRenderView", "CameraRenderView surfaceDestroyed ...");
         nativeSetSurface(null);
     }
 
@@ -331,7 +357,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private void startImageWorkerThread()
     {
-
+        Log.i("CameraRenderView", "CameraRenderView CreateImageWorkThread");
         mImageSessionThread = new HandlerThread("ImageSession");
         mImageSessionThread.start();
         mImageSessionHandler = new Handler(mImageSessionThread.getLooper());
@@ -370,15 +396,20 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private void stopImageWorkerThread()
     {
-        mImageThread.quitSafely();
-        try{
-            mImageThread.join();
-            mImageThread = null;
-            mImageHandler = null;
-        }catch (InterruptedException e)
+        if(mImageThread != null)
         {
-            e.printStackTrace();
+            mImageThread.quitSafely();
+            try{
+                mImageThread.join();
+                mImageThread = null;
+                mImageHandler = null;
+            }catch (InterruptedException e)
+            {
+                e.printStackTrace();
+            }
         }
+
+
     }
 
     private boolean isSurfaceAvailable()
@@ -390,23 +421,22 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         try{
             //Get the SurfaceTexture from SurfaceView GL Context
-            SurfaceTexture texture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
+            mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
 
-            texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            texture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+            mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
                 @Override
                 public void onFrameAvailable(SurfaceTexture surfaceTexture) {
                     nativeRequestUpdateTexture();
                 }
             });
             //This is the output surface we need to start preview
-            Surface surface = new Surface(texture);
-
+            Surface surface = new Surface(mSurfaceTexture);
             mPreviewBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             //Set Surface of SurfaceView as the target of the builder
             mPreviewBuilder.addTarget(surface);
             mPreviewBuilder.addTarget(mImageReader.getSurface());
-            mCamera.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()), mSessionStateCallback, mCamSessionHandler);
+            mCamera.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()), mSessionStateCallback, null);
         }catch (CameraAccessException e)
         {
             e.printStackTrace();
@@ -414,7 +444,11 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
     private  void startPreview(final CameraCaptureSession session) throws CameraAccessException{
-        session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mUIHandler);
+        session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler); //Must mCamSessionHandler
+        nativeNotifyCameraReady();
+
+        //Create Image Worker thread
+        //startImageWorkerThread();
     }
 
 
@@ -437,6 +471,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 throw  new RuntimeException("Time out waiting to lock camera opening.");
             }
             mCamManager.openCamera(mCameraId, mCameraDeviceCallback, mCamSessionHandler);
+
         }catch (CameraAccessException e)
         {
             e.printStackTrace();
@@ -559,11 +594,12 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
 
+    private SurfaceTexture getSurfaceTexture(){return mSurfaceTexture;}
+
     private Activity getActivity()
     {
         return mWeakActivity!= null?mWeakActivity.get():null;
     }
-
 
     private static Size chooseOptimalSize(Size[] choices, int textureViewWidth,
                                           int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
@@ -678,7 +714,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
 
         data = rotateYDegree90(data, width, height);
-        //Log.i("CameraRenderView", "CameraRenderView image width-height : " + image.getWidth() + " " + image.getHeight());
 
         nativeProcessImage(height, width, data);
     }
@@ -909,6 +944,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     static native void nativeSetSurface(Surface surface);
     static native void nativePauseApp();
     static native void nativeDestroyApp();
+    static native void nativeNotifyCameraReady();
     static native SurfaceTexture nativeSurfaceTexture(boolean flip);
     static native void nativeRequestUpdateTexture();
     static native void nativeDestroyTexture();

@@ -27,6 +27,8 @@ namespace nv
 
             void FlipBackground(bool flip);
 
+            void NotifyCameraReady();
+
             GLuint GetSurfaceTextureId(){return surface_texture_id_;}
 
             void CheckGlError(const char *op);
@@ -79,8 +81,10 @@ namespace nv
 
             NVCameraBackground *cam_background_;
 
-            std::mutex mut_;
-            std::condition_variable cond_;
+            std::mutex win_mut_;
+            std::condition_variable win_cond_;
+            std::mutex gl_mut_;
+            std::condition_variable gl_cond_;
 
             int width_;
             int height_;

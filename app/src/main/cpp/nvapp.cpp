@@ -1,6 +1,8 @@
 #include "nvapp.h"
 #include "nvrenderer.h"
 #include "nvtracker.h"
+#include "logger.h"
+#define LOG_TAG "NVApp"
 
 namespace nv
 {
@@ -20,7 +22,6 @@ namespace nv
         CreateGLThread();
 
         tracker_ = new tracker::NVTracker();
-        CreateTrackerThread();
     }
 
     void NVApp::Resume() {
@@ -28,12 +29,25 @@ namespace nv
         {
             renderer_->Resume();
         }
+
+        if(tracker_ != 0)
+        {
+            tracker_->Resume();
+            CreateTrackerThread();
+        }
+
     }
 
     void NVApp::Pause() {
         if(renderer_ != 0)
         {
             renderer_->Pause();
+        }
+
+        if(tracker_ != 0)
+        {
+            tracker_->Pause();
+            DestroyTrackerThread();
         }
     }
 
@@ -51,10 +65,12 @@ namespace nv
         if(tracker_ != 0)
         {
             tracker()->Destroy();
-            DestroyTrackerThread();
+
             delete  tracker_;
             tracker_ = 0;
         }
+
+
 
     }
 
@@ -68,6 +84,7 @@ namespace nv
     }
 
     void NVApp::CreateGLThread() {
+
         if(renderer_ != 0)
         {
             gl_thread_ = std::thread(&render::NVRenderer::_Run, renderer_);
@@ -83,6 +100,7 @@ namespace nv
     }
 
     void NVApp::CreateTrackerThread() {
+        LOG_INFO("nv log app create tracker thread");
         if(tracker_ != 0)
         {
             tracker_thread_ = std::thread(&tracker::NVTracker::_Run, tracker_);
@@ -90,12 +108,14 @@ namespace nv
     }
 
     void NVApp::DestroyTrackerThread() {
+        LOG_INFO("nv log app destroy tracker thread");
         if(tracker_ != 0)
         {
             if(tracker_thread_.joinable())
             {
                 tracker_thread_.join();
             }
+            LOG_INFO("nv log App Destroy Tracker Thread");
         }
     }
 

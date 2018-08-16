@@ -94,19 +94,40 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeCreateApp)(JNIEnv* jenv, jobject obj)
 
 JNIEXPORT void JNICALL NATIVE_METHOD(nativeResumeApp)(JNIEnv* jenv, jobject obj)
 {
-    kApp->Resume();
+    if(kApp != 0)
+        kApp->Resume();
 }
 
 
 JNIEXPORT void JNICALL NATIVE_METHOD(nativePauseApp)(JNIEnv* jenv, jobject obj)
 {
-    kApp->Pause();
+    if(kApp != 0)
+        kApp->Pause();
 }
 
 
 JNIEXPORT void JNICALL NATIVE_METHOD(nativeDestroyApp)(JNIEnv* jenv, jobject obj)
 {
-    kApp->Deinit();
+    if(kApp != 0)
+    {
+        kApp->Deinit();
+        delete kApp;
+        kApp = 0;
+    }
+
+}
+
+
+JNIEXPORT void JNICALL NATIVE_METHOD(nativeNotifyCameraReady)(JNIEnv* jenv, jobject obj)
+{
+    if(kApp != 0)
+    {
+        if(kApp->Render() != 0)
+        kApp->Render()->NotifyCameraReady();
+
+        if(kApp->tracker() != 0)
+            kApp->tracker()->NotifyCameraReady();
+    }
 }
 
 JNIEXPORT void JNICALL NATIVE_METHOD(nativeSetSurface)(JNIEnv* jenv, jobject obj, jobject surface)
@@ -116,13 +137,24 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeSetSurface)(JNIEnv* jenv, jobject obj
 
         kWindow = ANativeWindow_fromSurface(jenv, surface);
         LOG_INFO("nv log native set surface window %p", kWindow);
-        kApp->Render()->SetWindow(kWindow);
+
+        if(kApp != 0)
+        {
+            kApp->Render()->SetWindow(kWindow);
+        }
+
 
     }else{
-        kApp->Render()->SetWindow(0);
+        if(kApp != 0)
+        {
+            kApp->Render()->SetWindow(0);
+        }
+
         ANativeWindow_release(kWindow);
         LOG_INFO("nv log native release surface window ");
         kWindow = 0;
+
+
     }
 }
 
@@ -132,16 +164,21 @@ JNIEXPORT jobject JNICALL NATIVE_METHOD(nativeSurfaceTexture)(JNIEnv* jenv, jobj
     jmethodID   mid_construct = jenv->GetMethodID(clazz, "<init>", "(I)V");
     mid_update_tex = jenv->GetMethodID(clazz, "updateTexImage", "()V");
 
-    jobject obj_texture = jenv->NewObject(clazz, mid_construct, kApp->Render()->GetSurfaceTextureId());
-    jni_surfacetexture = jenv->NewGlobalRef(obj_texture);
+    if(jni_surfacetexture == 0)
+    {
+        jobject obj_texture = jenv->NewObject(clazz, mid_construct, kApp->Render()->GetSurfaceTextureId());
+        jni_surfacetexture = jenv->NewGlobalRef(obj_texture);
+        //If flip the camera background
+        kApp->Render()->FlipBackground(flip);
+    }
 
-    //If flip the camera background
-    kApp->Render()->FlipBackground(flip);
-    return obj_texture;
-
+    return jni_surfacetexture;
 }
 
+
+
 JNIEXPORT void JNICALL NATIVE_METHOD(nativeDestroyTexture)(JNIEnv* jenv, jobject obj){
+    std::lock_guard<std::mutex> lk(kMutex);
     jenv->DeleteGlobalRef(jni_surfacetexture);
     jni_surfacetexture = 0;
 }
@@ -201,6 +238,7 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeTestIMage)(JNIEnv* jenv, jobject obj,
             }
         }
         AndroidBitmap_unlockPixels(jenv, bitmap);
+
         return;
     }catch (const cv::Exception &e){
         //LOG_INFO("nv log jni nativeTestImage except\n");
