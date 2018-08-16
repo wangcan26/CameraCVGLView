@@ -93,11 +93,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private static final long MILLI_SECOND = MICRO_SECOND * 1000;
     private static final long ONE_SECOND = MILLI_SECOND * 1000;
 
-    private Bitmap              mBitmap;
     private Object              mLock = new Object();
-    private HandlerThread       mImageThread;
-    private Handler             mImageHandler;
-    private static final int    MSG_IMAGE_PROCESS = 0;
 
     private int                 mSensorOrientation;
     private static final int MAX_PREVIEW_WIDTH = 1920;
@@ -207,16 +203,20 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onImageAvailable(ImageReader imageReader) {
 
-            Message msg = mImageHandler.obtainMessage(MSG_IMAGE_PROCESS, imageReader);
+            last_time = System.currentTimeMillis();
+            Image image = imageReader.acquireLatestImage();
+            imageToYBytes(image);
+            image.close();
 
-            if(mImageHandler != null)
+            long cur_time = System.currentTimeMillis();
+            Log.i("CameraRenderView", "CameraRenderView Process Time one Frame: " + (cur_time-last_time));
+
+            //Compute the fps
+            synchronized (mLock)
             {
-                mImageHandler.sendMessage(msg);
-            }else{
-                imageReader.acquireLatestImage().close();
+                duration_time += (cur_time-last_time);
+                frame_number++;
             }
-
-
         }
     };
 
@@ -362,54 +362,23 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         mImageSessionThread.start();
         mImageSessionHandler = new Handler(mImageSessionThread.getLooper());
 
-        mImageThread = new HandlerThread("ImageProcess");
-        mImageThread.start();
-        mImageHandler = new Handler(mImageThread.getLooper(), new Handler.Callback() {
-            @Override
-            public boolean handleMessage(Message message) {
-                switch (message.what){
-                    case MSG_IMAGE_PROCESS:
-                        last_time = System.currentTimeMillis();
-                        Log.i("CameraRenderView", "Image Worker Process Image");
-                        ImageReader imageReader = (ImageReader) message.obj;
-                        Image image = imageReader.acquireLatestImage();
 
-                        imageToYBytes(image);
-                        image.close();
-                        mImageHandler.removeMessages(MSG_IMAGE_PROCESS);
-
-                        long cur_time = System.currentTimeMillis();
-                        Log.i("CameraRenderView", "CameraRenderView Process Time one Frame: " + (cur_time-last_time));
-
-                        //Compute the fps
-                        synchronized (mLock)
-                        {
-                            duration_time += (cur_time-last_time);
-                            frame_number++;
-                        }
-                        break;
-                }
-                return false;
-            }
-        });
     }
 
     private void stopImageWorkerThread()
     {
-        if(mImageThread != null)
+        if(mImageSessionThread != null)
         {
-            mImageThread.quitSafely();
+            mImageSessionThread.quitSafely();
             try{
-                mImageThread.join();
-                mImageThread = null;
-                mImageHandler = null;
-            }catch (InterruptedException e)
-            {
+
+                mImageSessionThread.join();
+                mImageSessionThread = null;
+                mImageSessionHandler = null;
+            }catch (InterruptedException e){
                 e.printStackTrace();
             }
         }
-
-
     }
 
     private boolean isSurfaceAvailable()
