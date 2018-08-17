@@ -159,6 +159,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 mPreviewBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, ONE_SECOND/30);
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
 
+
+
+
                 //int rotation = ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
                 //Log.i("CameraRenderView", "CameraRenderView CameraCaptureSession " + rotation);
                 //mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
@@ -173,6 +176,11 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
             Log.e("CameraRenderView", "onConfigureFailed");
+        }
+
+        @Override
+        public void onClosed(@NonNull CameraCaptureSession session) {
+            super.onClosed(session);
         }
     };
 
@@ -283,7 +291,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
     //Call in a thread that different from ImageReader Callback
-    public void testMat(final ImageView imageView, Handler handler)
+    public void testMat(final ImageView imageView)
     {
         /*synchronized (mLock)
         {
@@ -487,12 +495,25 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(mCameraId);
 
-            StreamConfigurationMap map =characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            if(isHardwareLevelSupported(characteristics, CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY))
+            {
+                Log.i("CameraRenderView", "CameraRenderview support hardware legacy");
+            }else if(isHardwareLevelSupported(characteristics, CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED))
+            {
+                Log.i("CameraRenderView", "CameraRenderview support hardware limited");
+            }
+            else if(isHardwareLevelSupported(characteristics, CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL))
+            {
+                Log.i("CameraRenderView", "CameraRenderview support hardware full");
+            }else if(isHardwareLevelSupported(characteristics, CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3))
+            {
+                Log.i("CameraRenderView", "CameraRenderview support hardware level 3");
+            }
 
+            StreamConfigurationMap map =characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.YUV_420_888)), new CompareSizesByArea());
 
             mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
-
             mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mImageSessionHandler);
 
             //Find out if we need to swap dimension to get the preview size relative to sensor coordinate
@@ -560,6 +581,30 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }catch (NullPointerException e){
             Log.e("CameraRenderView", "This device doesn't support Camera2 API");
         }
+    }
+
+
+    boolean isHardwareLevelSupported(CameraCharacteristics c, int requiredLevel) {
+        final int[] sortedHwLevels = {
+                CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY,
+                CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL,
+                CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED,
+                CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL,
+                CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3
+        };
+        int deviceLevel = c.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
+        if (requiredLevel == deviceLevel) {
+            return true;
+        }
+
+        for (int sortedlevel : sortedHwLevels) {
+            if (sortedlevel == requiredLevel) {
+                return true;
+            } else if (sortedlevel == deviceLevel) {
+                return false;
+            }
+        }
+        return false; // Should never reach here
     }
 
 

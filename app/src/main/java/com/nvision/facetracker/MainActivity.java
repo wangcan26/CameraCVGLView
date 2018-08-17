@@ -72,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         Log.i("MainActivity", "MainActivity Exectutor process testMat");
-                        mCameraView.testMat(mImageView, null);
+                        mCameraView.testMat(mImageView);
                     }
                 });
             }
@@ -131,7 +131,6 @@ public class MainActivity extends AppCompatActivity {
                 in = assetManager.open(filename);
 
                 File outFile = new File(getExternalFilesDir(null), filename);
-                Log.i("MainActivity", "MainActivity get Assets file "+ outFile.getPath());
                 out = new FileOutputStream(outFile);
                 copyFile(in, out);
             }catch (IOException e){
