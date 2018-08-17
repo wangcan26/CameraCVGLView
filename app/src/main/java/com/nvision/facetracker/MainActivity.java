@@ -60,7 +60,6 @@ public class MainActivity extends AppCompatActivity {
         //CameraRenderView
         mCameraView = (CameraRenderView) findViewById(R.id.camera_view);
         mCameraView.init(this);
-
         //ImageView Test for mat
         mImageView = (ImageView) findViewById(R.id.image_view);
         Button capture_button = (Button)findViewById(R.id.capture);
@@ -83,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         //Log.i("MainActivity", "MainActivity Lifecycle onResume");
         super.onResume();
+
         if(mCameraView != null)
         {
             mCameraView.onResume();

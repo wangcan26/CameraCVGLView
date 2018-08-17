@@ -10,6 +10,7 @@
 #include "logger.h"
 
 static auto kVertexShader =
+        "#version 100\n"
         "attribute vec4 vPosition;\n"
                 "attribute vec2 vUv;\n"
                 "varying vec2 oUv;\n"
@@ -19,6 +20,7 @@ static auto kVertexShader =
                 "}\n";
 
 static auto kFragmentShader =
+        "#version 100\n"
         "#extension GL_OES_EGL_image_external:require\n"
         "precision mediump float;\n"
                 "varying vec2 oUv;\n"
@@ -86,7 +88,7 @@ namespace nv
 
             glBindTexture(GL_TEXTURE_EXTERNAL_OES, renderer_->GetSurfaceTextureId());
             glActiveTexture(GL_TEXTURE0);
-            glUniform1f(texture_handle_, 0);
+            glUniform1i(texture_handle_, 0);
 
             glVertexAttribPointer(position_handle_, 2, GL_FLOAT, GL_FALSE, 0, kTriangleVertices);
             glEnableVertexAttribArray(position_handle_);
