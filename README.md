@@ -10,7 +10,8 @@ The demo contains two parts:
 ### CameraRenderView.java
 
 All the functions of camera2 api is encapsulating or to be encapsulated into this java class.
-Its lifecycle is as follows:
+
+Its lifecycles are as follows:
 
 1. init(Activity activity)
 2. onResume()
@@ -19,9 +20,16 @@ Its lifecycle is as follows:
 
 
 
+
+
 ### NVRenderer.h
 
 This file implements a gl environment for rendering things into android SurfaceView
+
+
+
+
+
 
 
 Welcom to join QQ Group: 207298950
