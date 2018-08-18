@@ -26,6 +26,7 @@ import android.media.VolumeShaper;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.v4.app.NavUtils;
 import android.support.v4.content.ContextCompat;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -195,28 +196,26 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     public void onResume()
     {
-        startCameraSessionThread();
-        if(isSurfaceAvailable()) openCamera();
-        else mSurfaceHolder.addCallback(this);
+
         nativeResumeApp();
     }
 
     public void onPause()
     {
-        closeCamera();
-        stopCameraSessionThread();
+
         nativePauseApp();
     }
 
     public void deinit()
     {
-        nativeDestroyTexture();
+
         nativeDestroyApp();
     }
 
 
     @Override
     public void surfaceCreated(SurfaceHolder surfaceHolder) {
+        mIsSurfaceAvailable = false;
     }
 
     @Override
@@ -226,6 +225,12 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         //This method may block the ui thread until the gl context and surface texture id created
         nativeSetSurface(surfaceHolder.getSurface());
+
+        startCameraSessionThread();
+        openCamera();
+
+
+
         mIsSurfaceAvailable = true;
 
     }
@@ -233,6 +238,22 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     @Override
     public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
         nativeSetSurface(null);
+
+        closeCamera();
+        stopCameraSessionThread();
+
+        if(mSurfaceTexture != null)
+        {
+            mSurfaceTexture.release();
+            nativeDestroyTexture();
+            mSurfaceTexture = null;
+        }
+
+        if(mSurface != null)
+        {
+            mSurface.release();
+            mSurface = null;
+        }
     }
 
     private void startCameraSessionThread()
@@ -264,23 +285,19 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         try{
             //Get the SurfaceTexture from SurfaceView GL Context
-            SurfaceTexture texture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
+            mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
 
-            texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            texture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+            mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
                 @Override
                 public void onFrameAvailable(SurfaceTexture surfaceTexture) {
                     nativeRequestUpdateTexture();
                 }
             });
             //This is the output surface we need to start preview
-            Surface surface = new Surface(texture);
-
-            mPreviewBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            //Set Surface of SurfaceView as the target of the builder
-            mPreviewBuilder.addTarget(surface);
-            mPreviewBuilder.addTarget(mImageReader.getSurface());
-            mCamera.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()), mSessionStateCallback,null);
+            mSurface = new Surface(mSurfaceTexture);
+            mPreviewBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW); //This must called before createCaptureSession
+            mCamera.createCaptureSession(Arrays.asList(mSurface, mImageReader.getSurface()), mSessionStateCallback,null);
         }catch (CameraAccessException e)
         {
             e.printStackTrace();
@@ -288,6 +305,11 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
     private  void startPreview(CameraCaptureSession session) throws CameraAccessException{
+        //Set Surface of SurfaceView as the target of the builder
+        mPreviewBuilder.addTarget(mSurface);
+        mPreviewBuilder.addTarget(mImageReader.getSurface());
+
+
         session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler);
     }
 
