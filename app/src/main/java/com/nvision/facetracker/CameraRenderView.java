@@ -222,12 +222,20 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         //This method may block the ui thread until the gl context and surface texture id created
         nativeSetSurface(surfaceHolder.getSurface());
-
-        //Only First time we open the camera and configure the output sizes for the surfaceTexture
+        //configure the output sizes for the surfaceTexture and select a id for camera
+        configureCamera(width, height);
+        //Only First time we open the camera and create imageReader
         if(!mIsSurfaceAvailable)
         {
-            startCameraSessionThread();
-            openCamera();
+            if(mCameraId != null)
+            {
+                startCameraSessionThread();
+                openCamera();
+            }
+
+            mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
+            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);
+
         }
         mIsSurfaceAvailable = true;
 
@@ -273,7 +281,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         try{
 
-            mSurface = getPreviewSurface();
+            mSurface = getPreviewSurface(mPreviewSize);
             mPreviewBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW); //This must called before createCaptureSession
             mCamera.createCaptureSession(Arrays.asList(mSurface, mImageReader.getSurface()), mSessionStateCallback,null);
         }catch (CameraAccessException e)
@@ -286,11 +294,16 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         //Set Surface of SurfaceView as the target of the builder
         mPreviewBuilder.addTarget(mSurface);
         mPreviewBuilder.addTarget(mImageReader.getSurface());
-
-
         session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler);
     }
 
+    private void configureCamera(int width, int height)
+    {
+        //Assume it is a face back camera
+        mCameraId = CAMERA_FACE_BACK;
+        ///Configure camera output surfaces
+        setupCameraOutputs(mWidth, mHeight);
+    }
 
     private void openCamera()
     {
@@ -300,22 +313,22 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             return;
         }
 
-        //Prepare for camera
+        ///Prepare for camera
         mCamManager = (CameraManager)getActivity().getSystemService(Context.CAMERA_SERVICE);
-        mCameraId = CAMERA_FACE_BACK;
-        //Prepare for ImageReader
-        setupCameraOutputs(mWidth, mHeight);
-
-        try{
+        try {
             if(!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)){
                 throw  new RuntimeException("Time out waiting to lock camera opening.");
             }
+        }catch (InterruptedException e){
+            throw  new RuntimeException("Interupted while trying to lock camera opening.", e);
+        }
+
+        try{
+
             mCamManager.openCamera(mCameraId, mCameraDeviceCallback, mCamSessionHandler);
         }catch (CameraAccessException e)
         {
             e.printStackTrace();
-        }catch (InterruptedException e){
-            throw  new RuntimeException("Interupted while trying to lock camera opening.", e);
         }
     }
 
@@ -361,10 +374,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
             Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.YUV_420_888)), new CompareSizesByArea());
 
-            mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
-
-            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);
-
             //Find out if we need to swap dimension to get the preview size relative to sensor coordinate
             int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
             mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
@@ -390,7 +399,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             }
 
             //Log.i("CameraRenderView", "CameraRenderView displaySize");
-
             Point displaySize = new Point();
             activity.getWindowManager().getDefaultDisplay().getSize(displaySize);
             int rotatedPreviewWidth = width;
@@ -433,13 +441,11 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
 
-    private Surface getPreviewSurface(){
+    private Surface getPreviewSurface(Size size){
         if(mSurface == null)
         {
             //Get the SurfaceTexture from SurfaceView GL Context
             mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
-
-            mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
             mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
                 @Override
                 public void onFrameAvailable(SurfaceTexture surfaceTexture) {
@@ -449,6 +455,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             //This is the output surface we need to start preview
             mSurface = new Surface(mSurfaceTexture);
         }
+
+        mSurfaceTexture.setDefaultBufferSize(size.getWidth(), size.getHeight());
         return mSurface;
     }
 
