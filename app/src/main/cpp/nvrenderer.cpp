@@ -157,7 +157,7 @@ namespace nv
 
 
             CheckGlError("glBindFramebuffer");
-            glClearColor(0.0, 1.0, 0.0, 1.0);
+            glClearColor(0.0, 0.0, 0.0, 1.0);
             CheckGlError("glClearColor");
             glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
             CheckGlError("glClear");
@@ -270,7 +270,7 @@ namespace nv
 
         void NVRenderer::DrawFrame() {
             //LOG_INFO("nv log renderer drawframe");
-            glClearColor(0.0, 1.0, 0.0, 1.0);
+            glClearColor(0.0, 0.0, 0.0, 1.0);
             CheckGlError("glClearColor");
             glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
             glViewport(0, 0, width_, height_);

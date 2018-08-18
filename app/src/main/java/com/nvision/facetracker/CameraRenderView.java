@@ -233,8 +233,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 openCamera();
             }
 
-            mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
-            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);
+            createImageReader();
 
         }
         mIsSurfaceAvailable = true;
@@ -246,6 +245,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         nativeSetSurface(null);
 
         closeCamera();
+        destroyImageReader();
         stopCameraSessionThread();
         destroyPreviewSurface();
 
@@ -346,18 +346,30 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             if(null != mCamera){
                 mCamera.close();
                 mCamera = null;
+                mCameraId = null;
             }
 
-            if(null != mImageReader)
-            {
-                mImageReader.close();
-                mImageReader = null;
-            }
         }catch (InterruptedException e)
         {
             throw new RuntimeException("Interrupted while trying to lock camera closing", e);
         }finally {
             mCameraOpenCloseLock.release();
+        }
+    }
+
+    private void createImageReader()
+    {
+        mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
+        mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);
+    }
+
+    private void destroyImageReader()
+    {
+
+        if(null != mImageReader)
+        {
+            mImageReader.close();
+            mImageReader = null;
         }
     }
 
