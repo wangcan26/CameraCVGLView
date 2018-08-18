@@ -70,8 +70,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private Handler             mCamSessionHandler;
 
     private int                 mSensorOrientation;
-    private static final int MAX_PREVIEW_WIDTH = 1920;
-    private static final int MAX_PREVIEW_HEIGHT = 1080;
+    private static final int    MAX_PREVIEW_WIDTH = 1920;
+    private static final int    MAX_PREVIEW_HEIGHT = 1080;
 
     private Size                mPreviewSize;
     private int mWidth, mHeight;
@@ -196,19 +196,16 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     public void onResume()
     {
-
         nativeResumeApp();
     }
 
     public void onPause()
     {
-
         nativePauseApp();
     }
 
     public void deinit()
     {
-
         nativeDestroyApp();
     }
 
@@ -232,8 +229,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             startCameraSessionThread();
             openCamera();
         }
-
-
         mIsSurfaceAvailable = true;
 
     }
@@ -244,19 +239,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         closeCamera();
         stopCameraSessionThread();
+        destroyPreviewSurface();
 
-        if(mSurfaceTexture != null)
-        {
-            mSurfaceTexture.release();
-            nativeDestroyTexture();
-            mSurfaceTexture = null;
-        }
-
-        if(mSurface != null)
-        {
-            mSurface.release();
-            mSurface = null;
-        }
         mIsSurfaceAvailable = false;
     }
 
@@ -288,18 +272,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private void createCameraPreviewSession() throws CameraAccessException
     {
         try{
-            //Get the SurfaceTexture from SurfaceView GL Context
-            mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
 
-            mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
-                @Override
-                public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-                    nativeRequestUpdateTexture();
-                }
-            });
-            //This is the output surface we need to start preview
-            mSurface = new Surface(mSurfaceTexture);
+            mSurface = getPreviewSurface();
             mPreviewBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW); //This must called before createCaptureSession
             mCamera.createCaptureSession(Arrays.asList(mSurface, mImageReader.getSurface()), mSessionStateCallback,null);
         }catch (CameraAccessException e)
@@ -455,6 +429,39 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             e.printStackTrace();
         }catch (NullPointerException e){
             Log.e("CameraRenderView", "This device doesn't support Camera2 API");
+        }
+    }
+
+
+    private Surface getPreviewSurface(){
+        if(mSurface == null)
+        {
+            //Get the SurfaceTexture from SurfaceView GL Context
+            mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
+
+            mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+                @Override
+                public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+                    nativeRequestUpdateTexture();
+                }
+            });
+            //This is the output surface we need to start preview
+            mSurface = new Surface(mSurfaceTexture);
+        }
+        return mSurface;
+    }
+
+    private void destroyPreviewSurface()
+    {
+        if(mSurface != null)
+        {
+
+            mSurfaceTexture.release();
+            nativeDestroyTexture();
+            mSurfaceTexture = null;
+            mSurface.release();
+            mSurface = null;
         }
     }
 
