@@ -33,7 +33,7 @@ static const GLfloat kTriangleVertices[] = { -1.0f, -1.0f, -1.0f, 1.0f,
 
 static const GLfloat kUvs[] = {1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0};
 
-static const GLfloat kUvs_flip[] = {0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0};
+static const GLfloat kUvs_flip[] = {0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0};
 
 static const GLushort kIndices[] = {0, 3, 1, 1, 3, 2};
 
@@ -86,7 +86,7 @@ namespace nv
 
             glBindTexture(GL_TEXTURE_EXTERNAL_OES, renderer_->GetSurfaceTextureId());
             glActiveTexture(GL_TEXTURE0);
-            glUniform1f(texture_handle_, 0);
+            glUniform1i(texture_handle_, 0);
 
             glVertexAttribPointer(position_handle_, 2, GL_FLOAT, GL_FALSE, 0, kTriangleVertices);
             glEnableVertexAttribArray(position_handle_);

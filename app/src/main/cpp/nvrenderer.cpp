@@ -1,4 +1,5 @@
 #include <thread>
+#include <stdlib.h>
 #include <android/native_window.h>
 
 #include "nvrenderer.h"
@@ -227,6 +228,14 @@ namespace nv
                 return false;
             }
 
+
+            if (!eglQuerySurface(display_, surface_, EGL_WIDTH, &width_) ||
+                !eglQuerySurface(display_, surface_, EGL_HEIGHT, &height_)) {
+                LOG_ERROR("eglQuerySurface() returned error %d", eglGetError());
+                ShutDown();
+                return false;
+            }
+
             msg_ = MSG_NONE;
             return true;
         }
@@ -264,6 +273,7 @@ namespace nv
             glClearColor(0.0, 1.0, 0.0, 1.0);
             CheckGlError("glClearColor");
             glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+            glViewport(0, 0, width_, height_);
 
             RenderBackground();
         }

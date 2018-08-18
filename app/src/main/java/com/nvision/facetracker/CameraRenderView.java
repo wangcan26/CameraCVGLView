@@ -226,9 +226,12 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         //This method may block the ui thread until the gl context and surface texture id created
         nativeSetSurface(surfaceHolder.getSurface());
 
-        startCameraSessionThread();
-        openCamera();
-
+        //Only First time we open the camera and configure the output sizes for the surfaceTexture
+        if(!mIsSurfaceAvailable)
+        {
+            startCameraSessionThread();
+            openCamera();
+        }
 
 
         mIsSurfaceAvailable = true;
@@ -254,6 +257,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mSurface.release();
             mSurface = null;
         }
+        mIsSurfaceAvailable = false;
     }
 
     private void startCameraSessionThread()
