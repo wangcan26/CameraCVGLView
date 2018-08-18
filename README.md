@@ -3,8 +3,9 @@
 This Project is a collection demos of opengl or computer vision based on android camera2 api 
 
 ## camera2 basic demo 
-The master branch is a basic demo for displaying camera preview 
-its contains two parts:
+The master branch is a basic demo for displaying camera preview using a SurfaceView with a SurfaceTexture created by OpenGL ES
+
+The demo contains two parts:
 
 ### CameraRenderView.java
 
