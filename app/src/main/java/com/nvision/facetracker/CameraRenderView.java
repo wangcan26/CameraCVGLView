@@ -256,7 +256,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         mSurfaceHolder.setKeepScreenOn(true);
         mSurfaceHolder.addCallback(this);
         //Create a App
-        nativeCreateApp();
+        nativeCreateApp(activity.getExternalFilesDir(null).getPath());
 
     }
 
@@ -1048,8 +1048,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }
     }
 
-
-    static native void nativeCreateApp();
+    static native void nativeCreateApp(String appPath);
     static native void nativeResumeApp();
     static native void nativeSetSurface(Surface surface);
     static native void nativePauseApp();

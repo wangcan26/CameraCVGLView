@@ -21,7 +21,7 @@ namespace nv
 
         ~NVApp();
 
-        void Init();
+        void Init(const std::string &path);
 
         void Resume();
 

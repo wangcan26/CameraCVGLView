@@ -3,7 +3,7 @@
 #include <thread>
 #include <condition_variable>
 #include <opencv2/highgui.hpp>
-
+#include <FaceTracker/Tracker.h>
 
 
 namespace nv
@@ -27,7 +27,7 @@ namespace nv
             };
 
 
-            NVTracker();
+            NVTracker(const std::string& path);
 
             ~NVTracker();
 
@@ -48,6 +48,11 @@ namespace nv
             void Destroy();
 
         protected:
+
+            void _Capture(cv::Mat& gray);
+
+            void _ProcessIO(const std::string& path);
+
             void _PopImage(const Image& image);
 
         private:
@@ -66,6 +71,7 @@ namespace nv
 
             static int kMaxImages;
 
+            std::string  app_path_;
             enum TrackerMessage msg_;
             Image       images_[2];
             Image       pop_image_;
@@ -78,6 +84,10 @@ namespace nv
             bool        pop_;
 
             bool       cam_configured_;
+
+            // Related args about tracker
+            FACETRACKER::Tracker   *model_;
+
         };
     }
 }

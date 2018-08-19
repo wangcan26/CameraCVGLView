@@ -81,16 +81,19 @@ set_target_properties(lib_tbb PROPERTIES IMPORTED_LOCATION ${ThirdParty_OPENCV}/
 add_library(lib_tegra_hal STATIC IMPORTED)
 set_target_properties(lib_tegra_hal PROPERTIES IMPORTED_LOCATION ${ThirdParty_OPENCV}/src/${ANDROID_ABI}/libtegra_hal.a)
 
-set(OPENCV_LIBS  opencv_videoio opencv_highgui opencv_imgproc opencv_objdetect opencv_calib3d opencv_core)
+set(OPENCV_LIBS  opencv_videoio opencv_objdetect opencv_highgui opencv_imgproc  opencv_calib3d opencv_core)
 set(OPENCV_THIRD_LIBS lib_jasper lib_jpeg lib_png lib_protobuf lib_tiff lib_tbb lib_tegra_hal)
 
+include_directories(${ThirdParty_OPENCV}/include)
+
 add_subdirectory(${ThirdParty_DIR}/cpufeatures)
+add_subdirectory(${ThirdParty_DIR}/FaceTracker)
+
 
 # Specifies libraries CMake should link to your target library. You
 # can link multiple libraries, such as libraries you define in this
 # build script, prebuilt third-party libraries, or system libraries.
 
-target_include_directories(nvision_core PRIVATE ${ThirdParty_OPENCV}/include)
 
 
 target_link_libraries( # Specifies the target library.
@@ -101,10 +104,6 @@ target_link_libraries( # Specifies the target library.
                        EGL
                        GLESv2
                        jnigraphics
+                       facetracker
                        log
-                       ${OPENCV_LIBS}
-                       ${OPENCV_THIRD_LIBS}
-                       cpu-features
-                       z
-                       m
                        )

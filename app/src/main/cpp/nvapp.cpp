@@ -17,11 +17,11 @@ namespace nv
 
     }
 
-    void NVApp::Init() {
+    void NVApp::Init(const std::string &path) {
         renderer_ = new render::NVRenderer();
         CreateGLThread();
 
-        tracker_ = new tracker::NVTracker();
+        tracker_ = new tracker::NVTracker(path);
     }
 
     void NVApp::Resume() {
@@ -53,6 +53,12 @@ namespace nv
 
     void NVApp::Deinit() {
 
+        if(tracker_ != 0)
+        {
+            tracker()->Destroy();
+            delete  tracker_;
+            tracker_ = 0;
+        }
 
         if(renderer_ != 0)
         {
@@ -61,17 +67,6 @@ namespace nv
             delete renderer_;
             renderer_ = 0;
         }
-
-        if(tracker_ != 0)
-        {
-            tracker()->Destroy();
-
-            delete  tracker_;
-            tracker_ = 0;
-        }
-
-
-
     }
 
     render::NVRenderer *NVApp::Render()

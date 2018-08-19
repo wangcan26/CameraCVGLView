@@ -131,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
                 in = assetManager.open(filename);
 
                 File outFile = new File(getExternalFilesDir(null), filename);
+                Log.i("MainActivity", "MainActivity copyAssets to App DIR: " + outFile.getPath());
                 out = new FileOutputStream(outFile);
                 copyFile(in, out);
             }catch (IOException e){

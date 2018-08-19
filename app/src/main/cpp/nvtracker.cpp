@@ -11,13 +11,15 @@ namespace nv
     namespace tracker
     {
         int NVTracker::kMaxImages = 1;
-        NVTracker::NVTracker():
+        NVTracker::NVTracker(const std::string& path):
+                app_path_(path),
                 msg_(MSG_NONE),
                 image_index_(0),
                 start_(false),
                 can_pop_(false),
                 pop_(false),
-                cam_configured_(false)
+                cam_configured_(false),
+                model_(0)
         {
 
         }
@@ -49,6 +51,12 @@ namespace nv
                     delete images_[i].buf_;
                     images_[i].buf_ = 0;
                 }
+            }
+
+            if(model_ != 0)
+            {
+                delete model_;
+                model_ = 0;
             }
 
 
@@ -117,6 +125,15 @@ namespace nv
             return true;
         }
 
+
+        void NVTracker::_Capture(cv::Mat& gray){
+            Image *image = &images_[kMaxImages -image_index_];
+            LOG_INFO("NVTracker Producer-Consumer Pop Out... %d", kMaxImages -image_index_);
+            gray =  cv::Mat(image->height_, image->width_, CV_8UC1, image->buf_);
+            cv::flip(gray, gray, 0);
+            mat_list_[image_index_] = gray;
+        }
+
         void NVTracker::_PopImage(const Image& image) {
             pop_image_.width_ = image.width_;
             pop_image_.height_ = image.height_;
@@ -125,11 +142,26 @@ namespace nv
             memcpy(pop_image_.buf_, image.buf_, len);
         }
 
+
+        void NVTracker::_ProcessIO(const std::string& path) {
+            std::string ft_file(path+"/face2.tracker");
+
+            if(model_ == 0)
+            {
+                model_ =  new FACETRACKER::Tracker(ft_file.c_str());
+            }
+
+        }
+
         void NVTracker::_Run() {
             //Wait for Image Array Ready
             std::unique_lock<std::mutex> tl_lk(tl_mut_);
             tl_cond_.wait(tl_lk);
             tl_lk.unlock();
+
+            //Read files into tracker
+            _ProcessIO(app_path_);
+            cv::Mat gray;
 
             float tic = nv::NVClock();
             while(start_)
@@ -145,25 +177,24 @@ namespace nv
                             can_pop_ = true;
                         }
 
-                        Image *image = &images_[kMaxImages -image_index_];
-                        LOG_INFO("NVTracker Producer-Consumer Pop Out... %d", kMaxImages -image_index_);
-                        cv::Mat gray =  cv::Mat(image->height_, image->width_, CV_8UC1, image->buf_);
-                        cv::flip(gray, gray, 0);
-                        mat_list_[image_index_] = gray;
-                        image_index_ = kMaxImages -image_index_;
+                        _Capture(gray);
+
 
                         std::unique_lock<std::mutex> lk(pc_mut_);
                         if(pop_)
                         {
+                            Image *image = &images_[kMaxImages -image_index_];
                             _PopImage(*image);
                             pop_ = false;
                         }
                         pop_cond_.notify_one();
                         lk.unlock();
 
+
+                        image_index_ = kMaxImages -image_index_;
                         msg_ = MSG_NONE;
                         float  toc = nv::NVClock();
-                        LOG_INFO("NVTracker Run In... %d, %d, %f ms\n", image->height_, image->width_, toc-tic);
+                        LOG_INFO("NVTracker Run In... %d, %d, %f ms\n", gray.rows, gray.cols, toc-tic);
                         tic = toc;
                     }
                         break;
