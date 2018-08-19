@@ -184,6 +184,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         public void onClosed(@NonNull CameraCaptureSession session) {
             mCaptureSession.close();
             mCaptureSession = null;
+
+            destroyImageReader();
+            stopImageWorkerThread();
         }
     };
 
@@ -316,45 +319,38 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         mWidth = width;
         mHeight = height;
 
-        startCameraSessionThread();
-
         //This method may block the ui thread until the gl context and surface texture id created
         if(!DIRECT_TO_VIEW)
             nativeSetSurface(surfaceHolder.getSurface());
 
-
-        if(mCamera != null) return;
         configureCamera(width, height);
-        openCamera();
-        mIsSurfaceAvailable = true;
 
-        startImageWorkerThread();
-
-
-
+        if(!mIsSurfaceAvailable)
+        {
+            startCameraSessionThread();
+            openCamera();
+            mIsSurfaceAvailable = true;
+        }
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
         Log.i("CameraRenderView", "CameraRenderView surfaceDestroyed ...");
 
-        stopImageWorkerThread();
         closeCamera();
         stopCameraSessionThread();
 
         if(!DIRECT_TO_VIEW)
         {
             nativeSetSurface(null);
-            if(mSurfaceTexture != null)
+            destroySurfaceTexture();
+            if(mSurface != null)
             {
-                mSurfaceTexture.release();
-                mSurfaceTexture.setOnFrameAvailableListener(null);
-                nativeDestroyTexture();
-                mSurfaceTexture = null;
                 mSurface.release();
                 mSurface = null;
             }
         }
+
 
     }
 
@@ -386,8 +382,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         mImageSessionThread = new HandlerThread("ImageSession");
         mImageSessionThread.start();
         mImageSessionHandler = new Handler(mImageSessionThread.getLooper());
-
-
     }
 
     private void stopImageWorkerThread()
@@ -414,20 +408,15 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private void createCameraPreviewSession() throws CameraAccessException
     {
         try{
+
+            startImageWorkerThread();
+            createImageReader();
+
             //Get the SurfaceTexture from SurfaceView GL Context
             if(!DIRECT_TO_VIEW)
             {
-                mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
-                mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
-                    @Override
-                    public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-                        nativeRequestUpdateTexture();
-                    }
-                });
-                //This is the output surface we need to start preview
-                Surface surface = new Surface(mSurfaceTexture);
-                mSurface = surface;
+                mSurfaceTexture = getSurfaceTexture();
+                mSurface = new Surface(mSurfaceTexture);
             }
 
             List<Surface> outputs = null;
@@ -504,12 +493,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 mCamera = null;
                 mCameraId = null;
             }
-
-            if(null != mImageReader)
-            {
-                mImageReader.close();
-                mImageReader = null;
-            }
         }catch (InterruptedException e)
         {
             throw new RuntimeException("Interrupted while trying to lock camera closing", e);
@@ -547,9 +530,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
             StreamConfigurationMap map =characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             Size largest = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.YUV_420_888)), new CompareSizesByArea());
-
-            mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
-            mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mImageSessionHandler);
 
             //Find out if we need to swap dimension to get the preview size relative to sensor coordinate
             int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
@@ -663,8 +643,49 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         return false; // Should never reach here
     }
 
+    private void createImageReader()
+    {
+        mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
+        mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mImageSessionHandler);
 
-    private SurfaceTexture getSurfaceTexture(){return mSurfaceTexture;}
+    }
+
+    private void destroyImageReader()
+    {
+        if(null != mImageReader)
+        {
+            mImageReader.close();
+            mImageReader = null;
+        }
+    }
+
+
+    private SurfaceTexture getSurfaceTexture(){
+        if(mSurfaceTexture == null)
+        {
+            mSurfaceTexture = nativeSurfaceTexture(mCameraId == CAMERA_FACE_BACK?true:false);
+            mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+                @Override
+                public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+                    nativeRequestUpdateTexture();
+                }
+            });
+            //This is the output surface we need to start preview
+        }
+        return mSurfaceTexture;
+    }
+
+    private void destroySurfaceTexture()
+    {
+        if(mSurfaceTexture != null)
+        {
+            mSurfaceTexture.release();
+            mSurfaceTexture.setOnFrameAvailableListener(null);
+            nativeDestroyTexture();
+            mSurfaceTexture = null;
+        }
+    }
 
     private Activity getActivity()
     {
