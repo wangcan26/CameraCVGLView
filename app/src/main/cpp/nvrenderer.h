@@ -8,13 +8,14 @@
 
 namespace nv
 {
+    class NVApp;
     namespace render
     {
         class NVCameraBackground;
         class NVRenderer
         {
         public:
-            NVRenderer();
+            NVRenderer(NVApp *app);
             ~NVRenderer();
 
             void Resume();
@@ -67,6 +68,9 @@ namespace nv
                 MSG_WINDOW_DESTROY,
                 MSG_LOOP_EXIT
             };
+
+
+            NVApp             *app_;
 
             enum RenderMessage msg_;
 

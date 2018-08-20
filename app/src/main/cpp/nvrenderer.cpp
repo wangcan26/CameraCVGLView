@@ -3,7 +3,9 @@
 #include <chrono>
 #include <android/native_window.h>
 
+#include "nvapp.h"
 #include "nvrenderer.h"
+#include "nvtracker.h"
 #include "logger.h"
 #include "global_interface.h"
 #include "nv_cam_background.h"
@@ -14,7 +16,8 @@ namespace nv
 {
     namespace render
     {
-        NVRenderer::NVRenderer():
+        NVRenderer::NVRenderer(NVApp *app):
+                app_(app),
                 msg_(MSG_NONE),
                 display_(0),
                 surface_(0),
@@ -180,6 +183,8 @@ namespace nv
             gl_lk.unlock();
             LOG_INFO("nv log renderer initialise wait for camera ready end");
 
+
+
             //Create camera background
             cam_background_ = new NVCameraBackground(this);
 
@@ -262,6 +267,8 @@ namespace nv
 
         void NVRenderer::ShutDown() {
 
+
+
             if(cam_background_ != 0)
             {
                 delete cam_background_;
@@ -282,7 +289,6 @@ namespace nv
             window_ = 0;
             window_init_ = false;
             msg_ = MSG_NONE;
-
             return;
         }
 

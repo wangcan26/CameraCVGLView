@@ -18,10 +18,10 @@ namespace nv
     }
 
     void NVApp::Init(const std::string &path) {
-        renderer_ = new render::NVRenderer();
+        renderer_ = new render::NVRenderer(this);
+        tracker_ = new tracker::NVTracker(this, path);
         CreateGLThread();
-
-        tracker_ = new tracker::NVTracker(path);
+        CreateTrackerThread();
     }
 
     void NVApp::Resume() {
@@ -32,8 +32,8 @@ namespace nv
 
         if(tracker_ != 0)
         {
+
             tracker_->Resume();
-            CreateTrackerThread();
         }
 
     }
@@ -47,7 +47,7 @@ namespace nv
         if(tracker_ != 0)
         {
             tracker_->Pause();
-            DestroyTrackerThread();
+
         }
     }
 
@@ -56,6 +56,7 @@ namespace nv
         if(tracker_ != 0)
         {
             tracker()->Destroy();
+            DestroyTrackerThread();
             delete  tracker_;
             tracker_ = 0;
         }
@@ -95,7 +96,7 @@ namespace nv
     }
 
     void NVApp::CreateTrackerThread() {
-        LOG_INFO("nv log app create tracker thread");
+        LOG_INFO("NVTracker Lifecycle create tracker thread");
         if(tracker_ != 0)
         {
             tracker_thread_ = std::thread(&tracker::NVTracker::_Run, tracker_);
@@ -103,14 +104,12 @@ namespace nv
     }
 
     void NVApp::DestroyTrackerThread() {
-        LOG_INFO("nv log app destroy tracker thread");
+
         if(tracker_ != 0)
         {
-            if(tracker_thread_.joinable())
-            {
-                tracker_thread_.join();
-            }
-            LOG_INFO("nv log App Destroy Tracker Thread");
+            LOG_INFO("NVTracker Lifecycle destroy tracker thread begin");
+            tracker_thread_.join();
+            LOG_INFO("NVTracker Lifecycle destroy tracker thread end");
         }
     }
 

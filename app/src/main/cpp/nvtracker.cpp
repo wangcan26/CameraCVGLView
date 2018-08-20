@@ -1,5 +1,6 @@
 #include <opencv2/imgproc.hpp>
 #include <chrono>
+#include "nvapp.h"
 #include "nvtracker.h"
 #include "logger.h"
 #include "nv_utils.h"
@@ -11,17 +12,19 @@ namespace nv
     namespace tracker
     {
         int NVTracker::kMaxImages = 1;
-        NVTracker::NVTracker(const std::string& path):
+        NVTracker::NVTracker(NVApp* app, const std::string& path):
+                app_(app),
                 app_path_(path),
                 msg_(MSG_NONE),
                 image_index_(0),
-                start_(false),
-                can_pop_(false),
+                start_(true),
+                is_process_(false),
                 pop_(false),
                 cam_configured_(false),
                 model_(0)
         {
-
+            //Read files into tracker
+            _ProcessIO(app_path_);
         }
 
         NVTracker::~NVTracker() {
@@ -29,20 +32,21 @@ namespace nv
         }
 
         void NVTracker::Resume() {
-            start_ = false;
-            image_index_ = 0;
+            LOG_INFO("NVTracker Lifecycle Resume");
+
         }
 
         void NVTracker::Pause() {
-            LOG_INFO("NVTracker Destroy  ...");
-            std::lock_guard<std::mutex> lk(pc_mut_);
-            tl_cond_.notify_one();
-            pop_cond_.notify_one();
+            LOG_INFO("NVTracker Lifecycle Pause");
 
-            msg_= MSG_LOOP_EXIT;
         }
 
         void NVTracker::Destroy() {
+            std::unique_lock<std::mutex> lk(tl_mut_);
+            LOG_INFO("NVTracker Lifecycle Destroy");
+            msg_= MSG_LOOP_EXIT;
+            tl_cond_.notify_one();
+            lk.unlock();
 
             for(int i= 0; i < kMaxImages; i++)
             {
@@ -58,18 +62,21 @@ namespace nv
                 delete model_;
                 model_ = 0;
             }
-
-
         }
 
         void NVTracker::NotifyCameraReady() {
+            std::unique_lock<std::mutex> tl_lk(tl_mut_);
+            LOG_INFO("NVTracker Lifecycle Camera Ready");
+            tl_cond_.notify_one();
+            tl_lk.unlock();
 
         }
 
-        void NVTracker::NotifyCameraIdle() {
-            std::lock_guard<std::mutex> tl_lk(tl_mut_);
-            LOG_INFO("NVTracker Run In idle ...");
-            cam_configured_ = false;
+        void NVTracker::NotifyCameraWait()  {
+            LOG_INFO("NVTracker Lifecycle Camera Wait");
+            std::lock_guard<std::mutex> lk(tl_mut_);
+            image_index_ = 0;
+            msg_ = MSG_WAIT_READY;
         }
 
         bool NVTracker::PushImage(int width, int height, unsigned  char* buf) {
@@ -78,7 +85,6 @@ namespace nv
 
             if(image->buf_ !=0 )
             {
-                LOG_INFO("NVTracker Producer-Consumer Push In... %d", image_index_);
                 delete image->buf_;
                 image->buf_ = 0;
             }
@@ -87,19 +93,26 @@ namespace nv
             image->width_ = width;
             image->height_ = height;
 
-            if(!start_)
-            {
-                image_index_ = kMaxImages -image_index_;
-            }
-
-            msg_ = MSG_FRAME_AVAIABLE;
 
             //image array has  full images
-            if(image_index_ == 0&& !start_)
+            LOG_INFO("NVTracker Producer-Consumer Push In... %d  %d", image_index_, msg_);
+
+            ///Consumer
+            if(!is_process_)
             {
-                std::lock_guard<std::mutex> tl_lk(tl_mut_);
-                start_ = true;
-                tl_cond_.notify_one();
+
+                if (image_index_ == 1 ) {
+                    is_process_ = true;
+                }
+                image_index_ = kMaxImages - image_index_;
+
+            }
+
+
+
+            if(msg_ == MSG_NONE && is_process_)
+            {
+                msg_ = MSG_FRAME_AVAIABLE;
             }
 
             return true;
@@ -108,7 +121,7 @@ namespace nv
          bool NVTracker::PopImage(Image& image) {
             //Accessor
             std::unique_lock<std::mutex> lk(pc_mut_);
-             if(!can_pop_){
+             if(!is_process_){
                  lk.unlock();
                  return false;
              }
@@ -117,29 +130,73 @@ namespace nv
              {
                  pop_ = true;
                  pop_cond_.wait(lk);
+                 lk.unlock();
+                 image = pop_image_;
              }
 
-             image = pop_image_;
 
-             lk.unlock();
             return true;
         }
 
 
-        void NVTracker::_Capture(cv::Mat& gray){
-            Image *image = &images_[kMaxImages -image_index_];
-            LOG_INFO("NVTracker Producer-Consumer Pop Out... %d", kMaxImages -image_index_);
-            gray =  cv::Mat(image->height_, image->width_, CV_8UC1, image->buf_);
-            cv::flip(gray, gray, 0);
-            mat_list_[image_index_] = gray;
+        void NVTracker::_WaitForCamReady() {
+            std::unique_lock<std::mutex> tl_lk(tl_mut_);
+            tl_cond_.wait(tl_lk);
+            tl_lk.unlock();
         }
 
-        void NVTracker::_PopImage(const Image& image) {
-            pop_image_.width_ = image.width_;
-            pop_image_.height_ = image.height_;
+
+        bool NVTracker::_Capture(cv::Mat& gray){
+            bool res = true;
+            switch (msg_) {
+                case MSG_FRAME_AVAIABLE:
+                {
+                    LOG_INFO("NVTracker Msg Frame Avaiable");
+
+                    Image *image = &images_[kMaxImages - image_index_];
+                    LOG_INFO("NVTracker Producer-Consumer Pop Out... %d",
+                             kMaxImages - image_index_);
+                    mat_list_[image_index_] = cv::Mat(image->height_, image->width_, CV_8UC1,
+                                                      image->buf_);
+                    //Next Frame
+                    image_index_ = kMaxImages - image_index_;
+                    msg_ = MSG_NONE;
+                }
+                    break;
+                case MSG_WAIT_READY:
+
+                    _WaitForCamReady();
+                    if(msg_ != MSG_LOOP_EXIT)
+                        msg_ = MSG_NONE;
+                    LOG_INFO("NVTracker Lifecycle Msg Ready");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    res = false;
+                    break;
+                case MSG_LOOP_EXIT:
+                {
+                    LOG_INFO("NVTracker Lifecycle msg Exit");
+                    res = false;
+                    start_ = false;
+                    image_index_ = 0;
+                    is_process_ = false;
+                    msg_ = MSG_NONE;
+                }
+                    break;
+                default:
+                    res = false;
+                    break;
+            }
+            if(res) gray = mat_list_[kMaxImages - image_index_];
+
+            return res;
+        }
+
+        void NVTracker::_PopImage(const cv::Mat& image) {
+            pop_image_.width_ = image.cols;
+            pop_image_.height_ = image.rows;
             int len = pop_image_.width_*pop_image_.height_;
             pop_image_.buf_ = new unsigned char[len];
-            memcpy(pop_image_.buf_, image.buf_, len);
+            memcpy(pop_image_.buf_, image.data, len);
         }
 
 
@@ -154,59 +211,32 @@ namespace nv
         }
 
         void NVTracker::_Run() {
-            //Wait for Image Array Ready
-            std::unique_lock<std::mutex> tl_lk(tl_mut_);
-            tl_cond_.wait(tl_lk);
-            tl_lk.unlock();
+            msg_ = MSG_WAIT_READY;
 
-            //Read files into tracker
-            _ProcessIO(app_path_);
             cv::Mat gray;
-
             float tic = nv::NVClock();
             while(start_)
             {
-
-                switch (msg_)
-                {
-                    case MSG_FRAME_AVAIABLE:
-                    {
-                        ///Consumer
-                        if(image_index_ == 1 && !can_pop_)
-                        {
-                            can_pop_ = true;
-                        }
-
-                        _Capture(gray);
-
-
-                        std::unique_lock<std::mutex> lk(pc_mut_);
-                        if(pop_)
-                        {
-                            Image *image = &images_[kMaxImages -image_index_];
-                            _PopImage(*image);
-                            pop_ = false;
-                        }
-                        pop_cond_.notify_one();
-                        lk.unlock();
-
-
-                        image_index_ = kMaxImages -image_index_;
-                        msg_ = MSG_NONE;
-                        float  toc = nv::NVClock();
-                        LOG_INFO("NVTracker Run In... %d, %d, %f ms\n", gray.rows, gray.cols, toc-tic);
-                        tic = toc;
-                    }
-                        break;
-                    case MSG_LOOP_EXIT:
-                    {
-                        start_ = false;
-                        msg_ = MSG_NONE;
-                    }
-                        break;
-                    default:
-                        break;
+                if(!_Capture(gray)) {
+                    continue;
                 }
+                cv::flip(gray, gray, 0);
+
+                if(pop_)
+                {
+                    std::unique_lock<std::mutex> lk(pc_mut_);
+                    LOG_INFO("NVTracker Run PopImage");
+                    _PopImage(gray);
+                    pop_ = false;
+                    pop_cond_.notify_one();
+                    lk.unlock();
+                }
+
+
+
+                float  toc = nv::NVClock();
+                //LOG_INFO("NVTracker Run In... %d, %d, %f ms\n", gray.rows, gray.cols, toc-tic);
+                tic = toc;
             }
         }
     }

@@ -29,6 +29,12 @@ namespace nv
 
         void Deinit();
 
+        void CreateTrackerThread();
+        void DestroyTrackerThread();
+
+        std::thread::id GetTrackerThreadId(){return tracker_thread_.get_id();}
+        std::thread::id GetGLTrheadId(){return gl_thread_.get_id();}
+
         render::NVRenderer *Render();
         tracker::NVTracker *tracker();
 
@@ -36,8 +42,7 @@ namespace nv
         void CreateGLThread();
         void DestroyGLThread();
 
-        void CreateTrackerThread();
-        void DestroyTrackerThread();
+
 
     private:
         render::NVRenderer *renderer_;

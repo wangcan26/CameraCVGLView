@@ -151,6 +151,14 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeNotifyCameraReady)(JNIEnv* jenv, jobj
     }
 }
 
+
+JNIEXPORT void JNICALL NATIVE_METHOD(nativeNotifyCameraWait)(JNIEnv* jenv, jobject obj)
+{
+
+    if(kApp != 0 && kApp->tracker() != 0)
+        kApp->tracker()->NotifyCameraWait();
+}
+
 JNIEXPORT void JNICALL NATIVE_METHOD(nativeSetSurface)(JNIEnv* jenv, jobject obj, jobject surface)
 {
 
@@ -217,7 +225,11 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject o
     jenv->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte *>(buf));
 
     //On Image Reader Thread
-    kApp->tracker()->PushImage(width, height, buf);
+
+    if(kApp != 0 && kApp->tracker() != 0)
+        kApp->tracker()->PushImage(width, height, buf);
+
+
 }
 
 //https://www.jianshu.com/p/08dcc910b088
@@ -225,7 +237,7 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeTestIMage)(JNIEnv* jenv, jobject obj,
 {
 
     nv::tracker::NVTracker::Image image;
-    if(!kApp->tracker()->PopImage(image)){
+    if(kApp != 0  && kApp->tracker() != 0&& !kApp->tracker()->PopImage(image)){
         if(image.buf_ != 0)
             delete image.buf_;
         return;

@@ -8,6 +8,7 @@
 
 namespace nv
 {
+    class NVApp;
     namespace tracker
     {
         class NVTracker
@@ -27,7 +28,7 @@ namespace nv
             };
 
 
-            NVTracker(const std::string& path);
+            NVTracker(NVApp *app, const std::string& path);
 
             ~NVTracker();
 
@@ -37,7 +38,7 @@ namespace nv
 
             void NotifyCameraReady();
 
-            void NotifyCameraIdle();
+            void NotifyCameraWait();
 
             bool PushImage(int width, int height, unsigned char* buf);
 
@@ -49,16 +50,19 @@ namespace nv
 
         protected:
 
-            void _Capture(cv::Mat& gray);
+            bool _Capture(cv::Mat& gray);
+
+            void _WaitForCamReady();
 
             void _ProcessIO(const std::string& path);
 
-            void _PopImage(const Image& image);
+            void _PopImage(const cv::Mat& image);
 
         private:
 
             enum TrackerMessage{
                 MSG_NONE = 0,
+                MSG_WAIT_READY,
                 MSG_FRAME_AVAIABLE,
                 MSG_LOOP_EXIT
             };
@@ -71,6 +75,8 @@ namespace nv
 
             static int kMaxImages;
 
+            NVApp        *app_;
+
             std::string  app_path_;
             enum TrackerMessage msg_;
             Image       images_[2];
@@ -80,7 +86,7 @@ namespace nv
             int     image_index_;
 
             bool        start_;
-            bool        can_pop_;
+            bool        is_process_;
             bool        pop_;
 
             bool       cam_configured_;

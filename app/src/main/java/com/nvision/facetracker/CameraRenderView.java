@@ -27,6 +27,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.support.annotation.NonNull;
+import android.support.v4.app.NavUtils;
 import android.support.v4.content.ContextCompat;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -71,6 +72,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private volatile Handler    //Create a handler from the ui thread
             mUIHandler = new Handler(Looper.getMainLooper());
     private Semaphore           mCameraOpenCloseLock = new Semaphore(1);
+    private Object              mThreadLock = new Object();
     private HandlerThread       mCamSessionThread;
     private Handler             mCamSessionHandler;
 
@@ -118,21 +120,31 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             {
                 e.printStackTrace();
             }
-
-
         }
 
         @Override
         public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            mCameraOpenCloseLock.release();
-            cameraDevice.close();
+            Log.i("CameraRenderView", "CameraRenderView CameraDevice onDisconncted");
+        }
+
+        @Override
+        public void onClosed(@NonNull CameraDevice camera) {
+
             mCamera = null;
             mCameraId = null;
+            nativeNotifyCameraWait();
+
+            Log.i("CameraRenderView", "CameraRenderView CameraDevice begn");
+
+            Log.i("CameraRenderView", "CameraRenderView CameraDevice closed");
+            closeCaptureSession();
+
+
         }
 
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int i) {
-
+            Log.i("CameraRenderView", "CameraRenderView CameraDevice Error");
         }
     };
 
@@ -182,11 +194,15 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         @Override
         public void onClosed(@NonNull CameraCaptureSession session) {
-            mCaptureSession.close();
             mCaptureSession = null;
 
             destroyImageReader();
             stopImageWorkerThread();
+            synchronized (mThreadLock)
+            {
+                mThreadLock.notify();
+            }
+            Log.i("CameraRenderView", "CameraRenderView CaptureSession closed");
         }
     };
 
@@ -223,7 +239,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             image.close();
 
             long cur_time = System.currentTimeMillis();
-            Log.i("CameraRenderView", "CameraRenderView Process Time one Frame: " + (cur_time-last_time));
 
             //Compute the fps
             synchronized (mLock)
@@ -263,14 +278,16 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     public void onResume()
     {
         Log.i("CameraRenderView", "CameraRenderView resume .....");
+
         nativeResumeApp();
+
     }
 
     public void onPause()
     {
         Log.i("CameraRenderView", "CameraRenderView Pause .....");
-
         nativePauseApp();
+
     }
 
     public void deinit()
@@ -338,11 +355,26 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         Log.i("CameraRenderView", "CameraRenderView surfaceDestroyed ...");
 
         closeCamera();
-        stopCameraSessionThread();
+        //Wait for CameraSession closed
 
+        if(mCaptureSession != null)
+        {
+            synchronized (mThreadLock)
+            {
+                try {
+                    mThreadLock.wait();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        stopCameraSessionThread();
+        nativeSetSurface(null);
+
+        //Release GL Resources
         if(!DIRECT_TO_VIEW)
         {
-            nativeSetSurface(null);
             destroySurfaceTexture();
             if(mSurface != null)
             {
@@ -352,6 +384,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }
 
 
+        Log.i("CameraRenderView", "CameraRenderView surfaceDestroyed end...");
     }
 
     private void startCameraSessionThread()
@@ -365,7 +398,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private void stopCameraSessionThread()
     {
         mCamSessionThread.quitSafely();
-
         try{
             mCamSessionThread.join();
             mCamSessionThread = null;
@@ -409,15 +441,14 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         try{
 
-            startImageWorkerThread();
-            createImageReader();
-
             //Get the SurfaceTexture from SurfaceView GL Context
             if(!DIRECT_TO_VIEW)
             {
                 mSurfaceTexture = getSurfaceTexture();
                 mSurface = new Surface(mSurfaceTexture);
             }
+            startImageWorkerThread();
+            createImageReader();
 
             List<Surface> outputs = null;
             if(DIRECT_TO_VIEW)
@@ -429,20 +460,28 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                         mSurface, mImageReader.getSurface());
             }
 
-            mCamera.createCaptureSession(outputs, mSessionStateCallback, null);
+            mCamera.createCaptureSession(outputs, mSessionStateCallback, mCamSessionHandler);
         }catch (CameraAccessException e)
         {
             e.printStackTrace();
         }
     }
 
+    private void closeCaptureSession()
+    {
+        if(mCaptureSession !=  null)
+        {
+            mCaptureSession.close();
+        }
+        Log.i("CameraRenderView", "CameraRenderView close CaptureSession .....");
+
+    }
+
     private  void startPreview(final CameraCaptureSession session) throws CameraAccessException{
         session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler); //Must mCamSessionHandler
 
-        if(!DIRECT_TO_VIEW){
-            Log.i("CameraRenderView", "CameraRenderView startPreview ...");
-            nativeNotifyCameraReady();
-        }
+        nativeNotifyCameraReady();
+        Log.i("CameraRenderView", "CameraRenderView startPreview ...");
     }
 
     private void configureCamera(int width, int height)
@@ -480,18 +519,11 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private void closeCamera()
     {
+        Log.i("CameraRenderView", "CameraRenderView closeCamera begin ...");
         try{
             mCameraOpenCloseLock.acquire();
-
-            if(null != mCaptureSession){
-                mCaptureSession.close();
-                mCaptureSession = null;
-            }
-
-            if(null != mCamera){
+            if(null != mCamera) {
                 mCamera.close();
-                mCamera = null;
-                mCameraId = null;
             }
         }catch (InterruptedException e)
         {
@@ -499,6 +531,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }finally {
             mCameraOpenCloseLock.release();
         }
+        Log.i("CameraRenderView", "CameraRenderView closeCamera end ...");
     }
 
 
@@ -1054,6 +1087,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     static native void nativePauseApp();
     static native void nativeDestroyApp();
     static native void nativeNotifyCameraReady();
+    static native void nativeNotifyCameraWait();
     static native SurfaceTexture nativeSurfaceTexture(boolean flip);
     static native void nativeRequestUpdateTexture();
     static native void nativeDestroyTexture();
