@@ -163,27 +163,30 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeSetSurface)(JNIEnv* jenv, jobject obj
 {
 
     if(surface != 0){
-
         kWindow = ANativeWindow_fromSurface(jenv, surface);
         LOG_INFO("nv log native set surface window %p", kWindow);
 
         if(kApp != 0)
         {
-            kApp->Render()->SetWindow(kWindow);
+            if(kApp->Render() != 0)
+                kApp->Render()->SetWindow(kWindow);
         }
 
 
     }else{
+
         if(kApp != 0)
         {
-            kApp->Render()->SetWindow(0);
+            if(kApp->Render() != 0)
+                kApp->Render()->SetWindow(0);
         }
 
-        ANativeWindow_release(kWindow);
-        LOG_INFO("nv log native release surface window ");
-        kWindow = 0;
-
-
+        if(kWindow != 0)
+        {
+            ANativeWindow_release(kWindow);
+            kWindow = 0;
+        }
+        LOG_INFO("nv log native release surface window end");
     }
 }
 
@@ -219,13 +222,17 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeRequestUpdateTexture)(JNIEnv* jenv, j
 
 JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject obj, jint width, jint height, jbyteArray data)
 {
+
+    if(data == 0)
+    {
+        return;
+    }
     int len = jenv->GetArrayLength(data);
 
     unsigned char *buf = new unsigned char[len];
     jenv->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte *>(buf));
 
     //On Image Reader Thread
-
     if(kApp != 0 && kApp->tracker() != 0)
         kApp->tracker()->PushImage(width, height, buf);
 

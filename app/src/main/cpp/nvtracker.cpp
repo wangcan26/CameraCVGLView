@@ -20,6 +20,7 @@ namespace nv
                 start_(true),
                 is_process_(false),
                 pop_(false),
+                is_pause_(false),
                 cam_configured_(false),
                 model_(0)
         {
@@ -33,35 +34,26 @@ namespace nv
 
         void NVTracker::Resume() {
             LOG_INFO("NVTracker Lifecycle Resume");
-
+            is_pause_ = false;
         }
 
         void NVTracker::Pause() {
             LOG_INFO("NVTracker Lifecycle Pause");
-
+            is_pause_ = true;
         }
 
         void NVTracker::Destroy() {
-            std::unique_lock<std::mutex> lk(tl_mut_);
-            LOG_INFO("NVTracker Lifecycle Destroy");
+
+
+            LOG_INFO("NVTracker Lifecycle Destroy send msg exit");
+            std::unique_lock<std::mutex> msg_lk(msg_mut_);
             msg_= MSG_LOOP_EXIT;
+            msg_lk.unlock();
+
+            LOG_INFO("NVTracker Lifecycle Destroy notify thread go");
+            std::unique_lock<std::mutex> tl_lk(tl_mut_);
             tl_cond_.notify_one();
-            lk.unlock();
-
-            for(int i= 0; i < kMaxImages; i++)
-            {
-                if(images_[i].buf_ != 0)
-                {
-                    delete images_[i].buf_;
-                    images_[i].buf_ = 0;
-                }
-            }
-
-            if(model_ != 0)
-            {
-                delete model_;
-                model_ = 0;
-            }
+            tl_lk.unlock();
         }
 
         void NVTracker::NotifyCameraReady() {
@@ -69,13 +61,11 @@ namespace nv
             LOG_INFO("NVTracker Lifecycle Camera Ready");
             tl_cond_.notify_one();
             tl_lk.unlock();
-
         }
 
         void NVTracker::NotifyCameraWait()  {
             LOG_INFO("NVTracker Lifecycle Camera Wait");
-            std::lock_guard<std::mutex> lk(tl_mut_);
-            image_index_ = 0;
+            std::lock_guard<std::mutex> msg_lk(msg_mut_);
             msg_ = MSG_WAIT_READY;
         }
 
@@ -108,10 +98,9 @@ namespace nv
 
             }
 
-
-
-            if(msg_ == MSG_NONE && is_process_)
+            if(is_process_)
             {
+                std::lock_guard<std::mutex> msg_lk(msg_mut_);
                 msg_ = MSG_FRAME_AVAIABLE;
             }
 
@@ -129,10 +118,11 @@ namespace nv
              if(!pop_)
              {
                  pop_ = true;
-                 pop_cond_.wait(lk);
-                 lk.unlock();
+                 LOG_INFO("NVTracker _PopImage Wait ");
+                 pc_cond_.wait(lk);
                  image = pop_image_;
              }
+             lk.unlock();
 
 
             return true;
@@ -151,7 +141,6 @@ namespace nv
             switch (msg_) {
                 case MSG_FRAME_AVAIABLE:
                 {
-                    LOG_INFO("NVTracker Msg Frame Avaiable");
 
                     Image *image = &images_[kMaxImages - image_index_];
                     LOG_INFO("NVTracker Producer-Consumer Pop Out... %d",
@@ -160,16 +149,16 @@ namespace nv
                                                       image->buf_);
                     //Next Frame
                     image_index_ = kMaxImages - image_index_;
+                    gray = mat_list_[kMaxImages - image_index_];
+                    cv::flip(gray, gray, 0);
                     msg_ = MSG_NONE;
                 }
                     break;
                 case MSG_WAIT_READY:
-
                     _WaitForCamReady();
                     if(msg_ != MSG_LOOP_EXIT)
                         msg_ = MSG_NONE;
-                    LOG_INFO("NVTracker Lifecycle Msg Ready");
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    //std::this_thread::sleep_for(std::chrono::milliseconds(300));
                     res = false;
                     break;
                 case MSG_LOOP_EXIT:
@@ -179,14 +168,29 @@ namespace nv
                     start_ = false;
                     image_index_ = 0;
                     is_process_ = false;
+
+                    for(int i= 0; i < kMaxImages; i++)
+                    {
+                        if(images_[i].buf_ != 0)
+                        {
+                            delete images_[i].buf_;
+                            images_[i].buf_ = 0;
+                        }
+                    }
+
+                    if(model_ != 0)
+                    {
+                        delete model_;
+                        model_ = 0;
+                    }
+
                     msg_ = MSG_NONE;
                 }
                     break;
                 default:
-                    res = false;
                     break;
             }
-            if(res) gray = mat_list_[kMaxImages - image_index_];
+
 
             return res;
         }
@@ -195,6 +199,7 @@ namespace nv
             pop_image_.width_ = image.cols;
             pop_image_.height_ = image.rows;
             int len = pop_image_.width_*pop_image_.height_;
+            LOG_INFO("NVTracker _PopImage data %d ", len);
             pop_image_.buf_ = new unsigned char[len];
             memcpy(pop_image_.buf_, image.data, len);
         }
@@ -210,6 +215,11 @@ namespace nv
 
         }
 
+
+        void NVTracker::_ProcessFrame(cv::Mat &frame) {
+
+        }
+
         void NVTracker::_Run() {
             msg_ = MSG_WAIT_READY;
 
@@ -220,16 +230,20 @@ namespace nv
                 if(!_Capture(gray)) {
                     continue;
                 }
-                cv::flip(gray, gray, 0);
 
-                if(pop_)
+
+                if(!is_pause_)
                 {
-                    std::unique_lock<std::mutex> lk(pc_mut_);
-                    LOG_INFO("NVTracker Run PopImage");
-                    _PopImage(gray);
-                    pop_ = false;
-                    pop_cond_.notify_one();
-                    lk.unlock();
+                    _ProcessFrame(gray);
+
+                    if(pop_)
+                    {
+                        std::unique_lock<std::mutex> lk(pc_mut_);
+                        _PopImage(gray);
+                        pop_ = false;
+                        pc_cond_.notify_one();
+                        lk.unlock();
+                    }
                 }
 
 
@@ -239,5 +253,6 @@ namespace nv
                 tic = toc;
             }
         }
+
     }
 }

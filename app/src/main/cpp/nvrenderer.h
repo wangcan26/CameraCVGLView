@@ -85,6 +85,7 @@ namespace nv
 
             NVCameraBackground *cam_background_;
 
+            std::mutex msg_mut_;
             std::mutex win_mut_;
             std::condition_variable win_cond_;
             std::mutex gl_mut_;
@@ -98,6 +99,7 @@ namespace nv
 
             bool window_init_;
             bool pause_;
+            bool run_;
 
         };
     }

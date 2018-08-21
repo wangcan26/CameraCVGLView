@@ -26,6 +26,7 @@ import android.media.ImageReader;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.v4.app.NavUtils;
 import android.support.v4.content.ContextCompat;
@@ -125,20 +126,23 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onDisconnected(@NonNull CameraDevice cameraDevice) {
             Log.i("CameraRenderView", "CameraRenderView CameraDevice onDisconncted");
+
         }
 
         @Override
         public void onClosed(@NonNull CameraDevice camera) {
 
+            Log.i("CameraRenderView", "CameraRenderView CameraDevice begin");
             mCamera = null;
             mCameraId = null;
             nativeNotifyCameraWait();
 
-            Log.i("CameraRenderView", "CameraRenderView CameraDevice begn");
+            synchronized (mThreadLock)
+            {
+                mThreadLock.notify();
+            }
 
             Log.i("CameraRenderView", "CameraRenderView CameraDevice closed");
-            closeCaptureSession();
-
 
         }
 
@@ -146,6 +150,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         public void onError(@NonNull CameraDevice cameraDevice, int i) {
             Log.i("CameraRenderView", "CameraRenderView CameraDevice Error");
         }
+
+
     };
 
     // Session State Callback
@@ -195,22 +201,30 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onClosed(@NonNull CameraCaptureSession session) {
             mCaptureSession = null;
-
             destroyImageReader();
-            stopImageWorkerThread();
-            synchronized (mThreadLock)
+            if(mCamSessionHandler != null)
             {
-                mThreadLock.notify();
+                mCamSessionHandler.sendEmptyMessage(MSG_CAM_CLOSE);
             }
             Log.i("CameraRenderView", "CameraRenderView CaptureSession closed");
         }
     };
 
-
+    private int mCaptureNumber = 0;
+    private boolean mCameraReady = false;
     private CameraCaptureSession.CaptureCallback mSessionCaptureCallback = new CameraCaptureSession.CaptureCallback() {
         @Override
         public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
             //Log.i("CameraRenderView","CameraCaptureSession Capture Completed");
+            if(!mCameraReady)
+            {
+                if(mCaptureNumber == 4){
+                    if(mCamSessionHandler != null) mCamSessionHandler.sendEmptyMessage(MSG_CAM_READY);
+                    mCameraReady = true;
+                }
+                mCaptureNumber++;
+            }
+
 
         }
 
@@ -221,6 +235,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         private void process(CaptureRequest result)
         {
+            Log.i("CameraRenderView","CameraCaptureSession Capture Process");
             //Nothing
         }
     };
@@ -235,11 +250,13 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
             last_time = System.currentTimeMillis();
             Image image = imageReader.acquireLatestImage();
-            imageToYBytes(image);
-            image.close();
+            if(image != null)
+            {
+                imageToYBytes(image);
+                image.close();
+            }
 
             long cur_time = System.currentTimeMillis();
-
             //Compute the fps
             synchronized (mLock)
             {
@@ -278,9 +295,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     public void onResume()
     {
         Log.i("CameraRenderView", "CameraRenderView resume .....");
-
         nativeResumeApp();
-
     }
 
     public void onPause()
@@ -319,8 +334,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 imageView.setImageBitmap(bitmap);
             }
         });
-
-
     }
 
     @Override
@@ -344,17 +357,23 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         if(!mIsSurfaceAvailable)
         {
+            mCaptureNumber = 0;
+            mCameraReady = false;
             startCameraSessionThread();
             openCamera();
             mIsSurfaceAvailable = true;
         }
+        Log.i("CameraRenderView", "CameraRenderView surfaceChanged end....");
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
         Log.i("CameraRenderView", "CameraRenderView surfaceDestroyed ...");
 
-        closeCamera();
+        if(mCamSessionHandler != null)
+        {
+            mCamSessionHandler.sendEmptyMessage(MSG_SESSION_CLOSE);
+        }
         //Wait for CameraSession closed
 
         if(mCaptureSession != null)
@@ -370,28 +389,43 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }
 
         stopCameraSessionThread();
-        nativeSetSurface(null);
-
         //Release GL Resources
         if(!DIRECT_TO_VIEW)
         {
+            nativeSetSurface(null);
             destroySurfaceTexture();
-            if(mSurface != null)
-            {
-                mSurface.release();
-                mSurface = null;
-            }
+
         }
-
-
         Log.i("CameraRenderView", "CameraRenderView surfaceDestroyed end...");
     }
 
+    private static final int MSG_CAM_CLOSE = 0;
+    private static final int MSG_SESSION_CLOSE = 1;
+    private static final int MSG_CAM_READY = 2;
     private void startCameraSessionThread()
     {
         mCamSessionThread = new HandlerThread("Camera2");
         mCamSessionThread.start();
-        mCamSessionHandler = new Handler(mCamSessionThread.getLooper());
+        mCamSessionHandler = new Handler(mCamSessionThread.getLooper(), new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message message) {
+                switch (message.what)
+                {
+                    case MSG_CAM_CLOSE:
+                        closeCamera();
+                        break;
+                    case MSG_SESSION_CLOSE:
+                        closeCaptureSession();
+                        break;
+                    case MSG_CAM_READY:
+                        nativeNotifyCameraReady();
+                        break;
+                }
+
+
+                return true;
+            }
+        });
 
     }
 
@@ -469,10 +503,15 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private void closeCaptureSession()
     {
+        stopImageWorkerThread(); ///Stop send buffer to native, then destroy image reader
+
+
         if(mCaptureSession !=  null)
         {
             mCaptureSession.close();
         }
+
+
         Log.i("CameraRenderView", "CameraRenderView close CaptureSession .....");
 
     }
@@ -480,7 +519,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private  void startPreview(final CameraCaptureSession session) throws CameraAccessException{
         session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler); //Must mCamSessionHandler
 
-        nativeNotifyCameraReady();
         Log.i("CameraRenderView", "CameraRenderView startPreview ...");
     }
 
@@ -687,6 +725,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         if(null != mImageReader)
         {
+            mImageReader.setOnImageAvailableListener(null, mCamSessionHandler);
             mImageReader.close();
             mImageReader = null;
         }
@@ -717,6 +756,12 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mSurfaceTexture.setOnFrameAvailableListener(null);
             nativeDestroyTexture();
             mSurfaceTexture = null;
+        }
+
+        if(mSurface != null)
+        {
+            mSurface.release();
+            mSurface = null;
         }
     }
 

@@ -19,6 +19,7 @@ namespace nv
         NVRenderer::NVRenderer(NVApp *app):
                 app_(app),
                 msg_(MSG_NONE),
+                window_(0),
                 display_(0),
                 surface_(0),
                 context_(0),
@@ -29,7 +30,8 @@ namespace nv
                 surface_texture_id_(0),
                 flip_background_(false),
                 window_init_(false),
-                pause_(false)
+                pause_(false),
+                run_(true)
         {
 
 
@@ -49,10 +51,15 @@ namespace nv
         }
 
         void NVRenderer::Destroy() {
+
+            std::unique_lock<std::mutex> gl_lk(gl_mut_);
             msg_ = MSG_LOOP_EXIT;
+            gl_cond_.notify_one();
+            gl_lk.unlock();
         }
 
         void NVRenderer::SetWindow(ANativeWindow *window) {
+            std::lock_guard<std::mutex> msg_lk(msg_mut_);
             if(window)
             {
                 window_ = window;
@@ -73,6 +80,7 @@ namespace nv
                 LOG_INFO("nv log renderer unblock ui thread");
             }else{
                 msg_ = MSG_WINDOW_DESTROY;
+                LOG_INFO("nv log renderer set window null");
             }
 
         }
@@ -178,18 +186,20 @@ namespace nv
 
             //Wait for camera session ready
             LOG_INFO("nv log renderer initialise wait for camera ready");
-            std::unique_lock<std::mutex> gl_lk(gl_mut_);
+            /*std::unique_lock<std::mutex> gl_lk(gl_mut_);
             gl_cond_.wait(gl_lk);
-            gl_lk.unlock();
+            gl_lk.unlock();*/
             LOG_INFO("nv log renderer initialise wait for camera ready end");
-
-
 
             //Create camera background
             cam_background_ = new NVCameraBackground(this);
 
-            msg_ = MSG_NONE;
-
+            std::unique_lock<std::mutex> msg_lk(msg_mut_);
+            if(msg_ == MSG_WINDOW_CREATE)
+            {
+                msg_ = MSG_NONE;
+            }
+            msg_lk.unlock();
 
 
             return true;
@@ -216,8 +226,8 @@ namespace nv
         }
 
         void NVRenderer::NotifyCameraReady() {
-            std::lock_guard<std::mutex> gl_lk(gl_mut_);
-            gl_cond_.notify_one();
+            /*std::lock_guard<std::mutex> gl_lk(gl_mut_);
+            gl_cond_.notify_one();*/
         }
 
         bool NVRenderer::WindowRestore() {
@@ -239,6 +249,8 @@ namespace nv
 
             surface_ = surface;
             context_ = context;
+
+            std::lock_guard<std::mutex> msg_lk(msg_mut_);
             msg_ = MSG_NONE;
 
         }
@@ -266,8 +278,8 @@ namespace nv
 
 
         void NVRenderer::ShutDown() {
-
-
+            if(!window_init_)return;
+            LOG_INFO("nv log renderer Shutdown begin");
 
             if(cam_background_ != 0)
             {
@@ -288,7 +300,19 @@ namespace nv
             config_ = 0;
             window_ = 0;
             window_init_ = false;
-            msg_ = MSG_NONE;
+
+
+            /*std::unique_lock<std::mutex> gl_lk(gl_mut_);
+            gl_cond_.notify_all();
+            gl_lk.unlock();*/
+
+            std::unique_lock<std::mutex> msg_lk(msg_mut_);
+            if(msg_ == MSG_WINDOW_DESTROY)
+                msg_ = MSG_NONE;
+            msg_lk.unlock();
+
+            LOG_INFO("nv log renderer Shutdown end");
+
             return;
         }
 
@@ -388,8 +412,7 @@ namespace nv
 
         void NVRenderer::_renderLoop() {
             //A little later than camerasession thread
-            bool run = true;
-            while(run)
+            while(run_)
             {
                 switch (msg_)
                 {
@@ -398,12 +421,12 @@ namespace nv
                         {
                             if(!Initialise())
                             {
-                                run = false;
+                                run_ = false;
                             }
                         }else{
                             if(WindowRestore())
                             {
-                                run = false;
+                                run_ = false;
                             }
                         }
                         break;
@@ -414,20 +437,27 @@ namespace nv
                         ShutDown();
                         break;
                     case MSG_LOOP_EXIT:
-                        run = false;
+                        LOG_INFO("nv log renderer msg exit");
+                        if(window_init_)
+                        {
+                            ShutDown();
+                        }
+                        run_ = false;
                         break;
                     default:
                         break;
                 }
 
 
-
                 if(window_init_ && !pause_)
                 {
+
                     DrawFrame();
                     SwapBuffers();
                 }
             }
+            LOG_INFO("nv log renderer thread exit");
         }
+
     }//render
 }

@@ -1,6 +1,7 @@
 package com.nvision.facetracker;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
@@ -31,7 +32,7 @@ import java.util.concurrent.Executors;
 import static com.nvision.facetracker.CameraRenderView.IMAGE_HEIGHT;
 import static com.nvision.facetracker.CameraRenderView.IMAGE_WIDTH;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
 
 
@@ -41,13 +42,27 @@ public class MainActivity extends AppCompatActivity {
 
     private HandlerThread       mTestMatThread;
     private Handler             mTestMatHandler;
-    public static final int    MSG_TEST_MAT = 0;
+    public static final int     MSG_TEST_MAT = 0;
 
+    public enum LIFECYCLE_ORDER{
+        CREATE,
+        RESUME,
+        PAUSE,
+        DESTROY
+    }
+    public static LIFECYCLE_ORDER kOrder;
 
+    public static boolean ACTIVITY_INIT = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
+
+        if(ACTIVITY_INIT) {
+            finish();
+            return;
+        }
 
         PermissionHelper.requestCameraPermission(this, true);
         setContentView(R.layout.activity_main);
@@ -76,24 +91,29 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+        kOrder  = LIFECYCLE_ORDER.CREATE;
+        ACTIVITY_INIT = true;
+        Log.i("MainActivity", "MainActivity Lifecycle onCreate");
     }
 
     @Override
     protected void onResume() {
-        //Log.i("MainActivity", "MainActivity Lifecycle onResume");
-        super.onResume();
 
+
+        Log.i("MainActivity", "MainActivity Lifecycle onResume");
+        super.onResume();
         if(mCameraView != null)
         {
             mCameraView.onResume();
         }
+        kOrder = LIFECYCLE_ORDER.RESUME;
 
 
     }
 
     @Override
     protected void onPause() {
-        //Log.i("MainActivity", "MainActivity Lifecycle onPause");
+        Log.i("MainActivity", "MainActivity Lifecycle onPause");
         if(mCameraView != null)
         {
             mCameraView.onPause();
@@ -104,11 +124,12 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-
         if(mCameraView != null){
             mCameraView.deinit();
         }
         super.onDestroy();
+        ACTIVITY_INIT = false;
+        Log.i("MainActivity", "MainActivity Lifecycle onDestroy");
 
     }
 

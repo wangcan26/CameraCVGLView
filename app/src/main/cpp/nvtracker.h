@@ -56,6 +56,8 @@ namespace nv
 
             void _ProcessIO(const std::string& path);
 
+            void _ProcessFrame(cv::Mat& frame);
+
             void _PopImage(const cv::Mat& image);
 
         private:
@@ -67,8 +69,11 @@ namespace nv
                 MSG_LOOP_EXIT
             };
 
+            std::mutex msg_mut_;
+
+
             std::mutex pc_mut_;
-            std::condition_variable push_cond_, pop_cond_;
+            std::condition_variable pc_cond_;
 
             std::mutex tl_mut_;
             std::condition_variable tl_cond_;
@@ -88,6 +93,7 @@ namespace nv
             bool        start_;
             bool        is_process_;
             bool        pop_;
+            bool        is_pause_;
 
             bool       cam_configured_;
 
