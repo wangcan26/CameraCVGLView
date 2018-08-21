@@ -56,8 +56,6 @@ namespace nv
 
             void _ProcessIO(const std::string& path);
 
-            void _ProcessFrame(cv::Mat& frame);
-
             void _PopImage(const cv::Mat& image);
 
         private:

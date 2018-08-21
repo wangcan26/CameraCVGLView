@@ -198,6 +198,7 @@ namespace nv
             pop_image_.height_ = image.rows;
             int len = pop_image_.width_*pop_image_.height_;
             LOG_INFO("NVTracker _PopImage data %d ", len);
+
             pop_image_.buf_ = new unsigned char[len];
             memcpy(pop_image_.buf_, image.data, len);
         }
@@ -214,10 +215,6 @@ namespace nv
         }
 
 
-        void NVTracker::_ProcessFrame(cv::Mat &frame) {
-
-        }
-
         void NVTracker::_Run() {
 
             std::unique_lock<std::mutex> msg_lk(msg_mut_);
@@ -226,6 +223,18 @@ namespace nv
             msg_lk.unlock();
 
             cv::Mat gray;
+            // init vars and set other tracking parameters
+            std::vector<int> w_size1(1); w_size1[0] = 7;
+            std::vector<int> w_size2(3); w_size2[0] = 11; w_size2[1] = 9; w_size2[2] = 7;
+            int n_iter = 5; double clamp = 3, f_tol = 0.01;
+
+            double top , left, bottom, right;
+            cv::Point top_left, bot_right;
+            const cv::Mat& pose = model_->_clm._pglobl;
+            double pitch, yaw, roll;
+
+            bool falied = true;
+
             float tic = nv::NVClock();
             while(start_)
             {
@@ -236,7 +245,32 @@ namespace nv
 
                 if(!is_pause_)
                 {
-                    _ProcessFrame(gray);
+                    if((int)model_->_shape.at<double>(0, 0)){
+                        int n = model_->_shape.rows/2;
+                        pitch = pose.at<double>(1, 0);
+                        yaw = pose.at<double>(2, 0);
+                        roll = pose.at<double>(3, 0);
+
+                        // Set face equalization region extremities
+                        if(model_->_shape.at<double>(0, 0) < 20.5)
+                        {
+                            if(model_->_shape.at<double>(0, 0) < 0)left = 0;
+                            else left = model_->_shape.at<double>(0, 0);
+                        }else left = model_->_shape.at<double>(0, 0) -20;
+
+                        if(model_->_shape.at<double>(16, 0)+20 > gray.cols -0.5)
+                        {
+                            if(model_->_shape.at<double>(16, 0) > gray.cols)
+                                right = gray.cols;
+                            else right = model_->_shape.at<double>(16, 0);
+                        }else right = model_->_shape.at<double>(16, 0) + 20;
+
+                        if(model_->_shape.at<double>(8+n, 0) > gray.rows -0.5)
+                        {
+
+                        }
+
+                    }
 
                     if(pop_)
                     {

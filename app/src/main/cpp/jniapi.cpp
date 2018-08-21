@@ -235,6 +235,10 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject o
     //On Image Reader Thread
     if(kApp != 0 && kApp->tracker() != 0)
         kApp->tracker()->PushImage(width, height, buf);
+    else{
+        delete buf;
+        LOG_INFO("nv log jni push image not delete buf");
+    }
 
 
 }

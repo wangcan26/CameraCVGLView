@@ -48,6 +48,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -80,6 +82,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private HandlerThread       mImageSessionThread;
     private Handler             mImageSessionHandler;
 
+    private HandlerThread       mCaptureThread;
+    private Handler             mCaptureHandler;
+
     // Durations in nanoseconds
     private static final long MICRO_SECOND = 1000;
     private static final long MILLI_SECOND = MICRO_SECOND * 1000;
@@ -98,6 +103,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     public static int IMAGE_WIDTH = 640, IMAGE_HEIGHT= 480;
     public static final String CAMERA_FACE_BACK = "" + CameraCharacteristics.LENS_FACING_BACK;
     public static final String CAMERA_FACE_FRONT = "" + CameraCharacteristics.LENS_FACING_FRONT;
+
+
+    ExecutorService            mExecutorService;
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
@@ -287,6 +295,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         mSurfaceHolder = this.getHolder();
         mSurfaceHolder.setKeepScreenOn(true);
         mSurfaceHolder.addCallback(this);
+        mExecutorService = Executors.newCachedThreadPool();
         //Create a App
         nativeCreateApp(activity.getExternalFilesDir(null).getPath());
 
@@ -466,6 +475,29 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }
     }
 
+    private void startCaptureThread()
+    {
+        mCaptureThread = new HandlerThread("Capture");
+        mCaptureThread.start();
+        mCaptureHandler = new Handler(mCaptureThread.getLooper());
+    }
+
+
+    private void stopCaptureThread()
+    {
+        if(mCaptureThread != null)
+        {
+            mCaptureThread.quitSafely();
+            try {
+                mCaptureThread.join();
+                mCaptureHandler = null;
+                mCaptureThread = null;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     private boolean isSurfaceAvailable()
     {
         return mSurfaceHolder!= null&&mIsSurfaceAvailable;
@@ -544,7 +576,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             if(!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)){
                 throw  new RuntimeException("Time out waiting to lock camera opening.");
             }
-            mCamManager.openCamera(mCameraId, mCameraDeviceCallback, mCamSessionHandler);
+            mCamManager.openCamera(mCameraId,  mCameraDeviceCallback, mCamSessionHandler);
 
         }catch (CameraAccessException e)
         {
