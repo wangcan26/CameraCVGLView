@@ -517,7 +517,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
     private  void startPreview(final CameraCaptureSession session) throws CameraAccessException{
-        session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mCamSessionHandler); //Must mCamSessionHandler
+        session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mUIHandler); //Must mCamSessionHandler
 
         Log.i("CameraRenderView", "CameraRenderView startPreview ...");
     }

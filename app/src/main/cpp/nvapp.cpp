@@ -21,7 +21,7 @@ namespace nv
         renderer_ = new render::NVRenderer(this);
         tracker_ = new tracker::NVTracker(this, path);
         CreateGLThread();
-        //CreateTrackerThread();
+        CreateTrackerThread();
     }
 
     void NVApp::Resume() {
@@ -65,7 +65,7 @@ namespace nv
         if(tracker_ != 0)
         {
             tracker()->Destroy();
-            //DestroyTrackerThread();
+            DestroyTrackerThread();
             delete  tracker_;
             tracker_ = 0;
         }

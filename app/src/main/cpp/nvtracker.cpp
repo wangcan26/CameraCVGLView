@@ -43,8 +43,6 @@ namespace nv
         }
 
         void NVTracker::Destroy() {
-
-
             LOG_INFO("NVTracker Lifecycle Destroy send msg exit");
             std::unique_lock<std::mutex> msg_lk(msg_mut_);
             msg_= MSG_LOOP_EXIT;
@@ -138,6 +136,7 @@ namespace nv
 
         bool NVTracker::_Capture(cv::Mat& gray){
             bool res = true;
+
             switch (msg_) {
                 case MSG_FRAME_AVAIABLE:
                 {
@@ -158,7 +157,6 @@ namespace nv
                     _WaitForCamReady();
                     if(msg_ != MSG_LOOP_EXIT)
                         msg_ = MSG_NONE;
-                    //std::this_thread::sleep_for(std::chrono::milliseconds(300));
                     res = false;
                     break;
                 case MSG_LOOP_EXIT:
@@ -221,7 +219,11 @@ namespace nv
         }
 
         void NVTracker::_Run() {
-            msg_ = MSG_WAIT_READY;
+
+            std::unique_lock<std::mutex> msg_lk(msg_mut_);
+            if(msg_ == MSG_NONE)
+                msg_ = MSG_WAIT_READY;
+            msg_lk.unlock();
 
             cv::Mat gray;
             float tic = nv::NVClock();
