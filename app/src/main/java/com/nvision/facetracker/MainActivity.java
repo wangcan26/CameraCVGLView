@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
 
     private CameraRenderView mCameraView;
     private ImageView        mImageView;
-    private Bitmap          mTestBitmap;
+    private Bitmap           mTestBitmap;
 
     private HandlerThread       mTestMatThread;
     private Handler             mTestMatHandler;
@@ -77,6 +77,9 @@ public class MainActivity extends Activity {
         mCameraView.init(this);
         //ImageView Test for mat
         mImageView = (ImageView) findViewById(R.id.image_view);
+
+
+        //Call in a thread that different from ImageReader Callback
         Button capture_button = (Button)findViewById(R.id.capture);
         capture_button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -86,7 +89,19 @@ public class MainActivity extends Activity {
                     @Override
                     public void run() {
                         Log.i("MainActivity", "MainActivity Exectutor process testMat");
-                        mCameraView.testMat(mImageView);
+                        if(mTestBitmap != null &&mTestBitmap.isRecycled())
+                        {
+                            mTestBitmap.recycle();
+                        }
+                        mTestBitmap = Bitmap.createBitmap(IMAGE_HEIGHT, IMAGE_WIDTH, Bitmap.Config.ARGB_8888);
+                        mCameraView.nativeTestIMage(mTestBitmap);
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Log.i("MainActivity", "MainActivity onCreate mImageView set ImageBitmap");
+                                mImageView.setImageBitmap(mTestBitmap);
+                            }
+                        });
                     }
                 });
             }

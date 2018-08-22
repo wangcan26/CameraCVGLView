@@ -45,6 +45,7 @@ namespace nv
         void NVTracker::Destroy() {
             LOG_INFO("NVTracker Lifecycle Destroy send msg exit");
             std::unique_lock<std::mutex> msg_lk(msg_mut_);
+            is_process_ = false;
             msg_= MSG_LOOP_EXIT;
             msg_lk.unlock();
 
@@ -165,7 +166,6 @@ namespace nv
                     res = false;
                     start_ = false;
                     image_index_ = 0;
-                    is_process_ = false;
 
                     for(int i= 0; i < kMaxImages; i++)
                     {
@@ -274,9 +274,9 @@ namespace nv
 
                     if(pop_)
                     {
+                        pop_ = false;
                         std::unique_lock<std::mutex> lk(pc_mut_);
                         _PopImage(gray);
-                        pop_ = false;
                         pc_cond_.notify_one();
                         lk.unlock();
                     }

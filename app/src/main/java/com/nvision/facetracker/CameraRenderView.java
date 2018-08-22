@@ -137,6 +137,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         }
 
+
         @Override
         public void onClosed(@NonNull CameraDevice camera) {
 
@@ -157,7 +158,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int i) {
             Log.i("CameraRenderView", "CameraRenderView CameraDevice Error");
+
         }
+
 
 
     };
@@ -201,6 +204,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         }
 
+
         @Override
         public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
             Log.e("CameraRenderView", "onConfigureFailed");
@@ -209,7 +213,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         @Override
         public void onClosed(@NonNull CameraCaptureSession session) {
             mCaptureSession = null;
-            destroyImageReader();
             if(mCamSessionHandler != null)
             {
                 mCamSessionHandler.sendEmptyMessage(MSG_CAM_CLOSE);
@@ -232,8 +235,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 }
                 mCaptureNumber++;
             }
-
-
         }
 
         @Override
@@ -319,32 +320,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         nativeDestroyApp();
     }
 
-    //Call in a thread that different from ImageReader Callback
-    public void testMat(final ImageView imageView)
-    {
-        /*synchronized (mLock)
-        {
-            if(duration_time > MICRO_SECOND)
-            {
-
-
-                float fps = (float)MICRO_SECOND/frame_number;
-                Log.i("CameraRenderView", "CameraRenderView ImageReader imageToByteArray2 " + fps);
-                frame_number = 0;
-                duration_time = 0;
-            }
-        }*/
-        final Bitmap bitmap = Bitmap.createBitmap(IMAGE_HEIGHT, IMAGE_WIDTH, Bitmap.Config.ARGB_8888);
-        nativeTestIMage(bitmap);
-        getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                Log.i("MainActivity", "MainActivity onCreate mImageView set ImageBitmap");
-                imageView.setImageBitmap(bitmap);
-            }
-        });
-    }
-
     @Override
     public void surfaceCreated(SurfaceHolder surfaceHolder) {
         Log.i("CameraRenderView", "CameraRenderView surfaceCreated ....");
@@ -397,7 +372,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             }
         }
 
+        destroyImageReader();
         stopCameraSessionThread();
+
         //Release GL Resources
         if(!DIRECT_TO_VIEW)
         {
@@ -454,9 +431,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private void startImageWorkerThread()
     {
         Log.i("CameraRenderView", "CameraRenderView CreateImageWorkThread");
-        mImageSessionThread = new HandlerThread("ImageSession");
+        /*mImageSessionThread = new HandlerThread("ImageSession");
         mImageSessionThread.start();
-        mImageSessionHandler = new Handler(mImageSessionThread.getLooper());
+        mImageSessionHandler = new Handler(mImageSessionThread.getLooper());*/
     }
 
     private void stopImageWorkerThread()
@@ -466,9 +443,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mImageSessionThread.quitSafely();
             try{
 
+                mImageSessionHandler = null;
                 mImageSessionThread.join();
                 mImageSessionThread = null;
-                mImageSessionHandler = null;
             }catch (InterruptedException e){
                 e.printStackTrace();
             }
@@ -748,8 +725,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private void createImageReader()
     {
-        mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
-        mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mImageSessionHandler);
+        mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 4);
+        mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);//mImageSessionHandler
 
     }
 
