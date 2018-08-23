@@ -13,6 +13,7 @@ extern "C"
     extern JNIEnv *g_env;
     extern int     g_attached;
     extern UnionJNIEnvToVoid g_uenv;
+    extern double kTexTimestamp;
 
     extern void android_app_update_tex_image();
 

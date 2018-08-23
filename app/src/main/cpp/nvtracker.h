@@ -18,10 +18,12 @@ namespace nv
                 unsigned char* buf_;
                 int width_;
                 int height_;
+                double timestamp_;
 
                 Image():width_(640),
                         height_(480),
-                        buf_(0)
+                        buf_(0),
+                        timestamp_(0.0)
                 {
 
                 }
@@ -40,7 +42,7 @@ namespace nv
 
             void NotifyCameraWait();
 
-            bool PushImage(int width, int height, unsigned char* buf);
+            bool PushImage(int width, int height, unsigned char* buf, double timestamp);
 
             bool PopImage(Image& image);
 

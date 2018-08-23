@@ -32,8 +32,11 @@ static ANativeWindow *kWindow = 0;
 
 jobject     jni_surfacetexture = 0;
 jmethodID   mid_update_tex;
+jmethodID   mid_get_timestamp;
 static bool request_update_tex = false;
 static std::mutex kMutex;
+
+double kTexTimestamp = 0.0;
 
 std::string
 jstring2str(JNIEnv* env, jstring jstr)
@@ -72,7 +75,8 @@ void android_app_update_tex_image()
     std::lock_guard<std::mutex> lk(kMutex);
     if(jni_surfacetexture != 0 && request_update_tex)
     {
-        LOG_INFO("nv log jni update surface texture");
+        kTexTimestamp = (double)(g_env->CallLongMethod(jni_surfacetexture, mid_get_timestamp)/1e6);
+        LOG_INFO("nv log jni update surface texture %f", kTexTimestamp);
         g_env->CallVoidMethod(jni_surfacetexture, mid_update_tex);
         request_update_tex = false;
     }
@@ -195,6 +199,7 @@ JNIEXPORT jobject JNICALL NATIVE_METHOD(nativeSurfaceTexture)(JNIEnv* jenv, jobj
     jclass      clazz = jenv->FindClass("android/graphics/SurfaceTexture");
     jmethodID   mid_construct = jenv->GetMethodID(clazz, "<init>", "(I)V");
     mid_update_tex = jenv->GetMethodID(clazz, "updateTexImage", "()V");
+    mid_get_timestamp = jenv->GetMethodID(clazz, "getTimestamp", "()J");
 
     if(jni_surfacetexture == 0)
     {
@@ -220,7 +225,7 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeRequestUpdateTexture)(JNIEnv* jenv, j
     request_update_tex = true;
 }
 
-JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject obj, jint width, jint height, jbyteArray data)
+JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject obj, jint width, jint height, jbyteArray data, jdouble timestamp)
 {
 
     if(data == 0)
@@ -234,7 +239,7 @@ JNIEXPORT void JNICALL NATIVE_METHOD(nativeProcessImage)(JNIEnv* jenv, jobject o
 
     //On Image Reader Thread
     if(kApp != 0 && kApp->tracker() != 0)
-        kApp->tracker()->PushImage(width, height, buf);
+        kApp->tracker()->PushImage(width, height, buf, timestamp);
     else{
         delete buf;
         LOG_INFO("nv log jni push image not delete buf");

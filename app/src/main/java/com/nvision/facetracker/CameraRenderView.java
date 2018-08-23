@@ -749,6 +749,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
                 @Override
                 public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+
                     nativeRequestUpdateTexture();
                 }
             });
@@ -911,8 +912,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
 
         data = rotateYDegree90(data, width, height);
-
-        nativeProcessImage(height, width, data);
+        double timestamp = (double)image.getTimestamp()/1e6;
+        nativeProcessImage(height, width, data, timestamp);
     }
 
     //https://www.polarxiong.com/archives/Android-YUV_420_888%E7%BC%96%E7%A0%81Image%E8%BD%AC%E6%8D%A2%E4%B8%BAI420%E5%92%8CNV21%E6%A0%BC%E5%BC%8Fbyte%E6%95%B0%E7%BB%84.html
@@ -976,8 +977,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         data = rotateYUV420Degree90(data, width, height);
         //Log.i("CameraRenderView", "CameraRenderView image width-height : " + image.getWidth() + " " + image.getHeight());
-
-        nativeProcessImage(width, height, data);
+        double timestamp = (double)image.getTimestamp()/1e6;
+        nativeProcessImage(width, height, data, timestamp);
     }
 
 
@@ -1030,8 +1031,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             }
         }
 
-
-        nativeProcessImage(width, height, data);
+        double timestamp = (double)image.getTimestamp()/1e6;
+        nativeProcessImage(width, height, data, timestamp);
     }
 
 
@@ -1146,6 +1147,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     static native void nativeRequestUpdateTexture();
     static native void nativeDestroyTexture();
 
-    static native void nativeProcessImage(int width, int height, byte[] data);
+    static native void nativeProcessImage(int width, int height, byte[] data, double timestamp);
     static native void nativeTestIMage(Bitmap bitmap);
 }
