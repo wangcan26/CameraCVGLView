@@ -4,6 +4,7 @@
 #include "nvtracker.h"
 #include "logger.h"
 #include "nv_utils.h"
+#include "global_interface.h"
 
 #define LOG_TAG "NVTracker"
 
@@ -19,6 +20,7 @@ namespace nv
                 image_index_(0),
                 start_(true),
                 is_process_(false),
+                do_process_(false),
                 pop_(false),
                 is_pause_(false),
                 cam_configured_(false),
@@ -78,10 +80,11 @@ namespace nv
                 image->buf_ = 0;
             }
             image->buf_ = buf;
-
             image->width_ = width;
             image->height_ = height;
             image->timestamp_ = timestamp;
+
+
 
             //image array has  full images
             LOG_INFO("NVTracker Producer-Consumer Push In... %d  %f", image_index_, timestamp);
@@ -138,31 +141,48 @@ namespace nv
         //                    |                   \|/             ||//
         //                   \/                   \/
         //|| Processor ||   0 side    ||       1 side           ||//
-        //|| Producer  ||   0 side    ||       1 side           ||//
+        //|| Producer  ||   0 side    ||       1 side           ||  is process //
         //|| images_   || image_index || kMaxImages- image_index||//
         //                   |    __________________|             //
         //                   |___|____________________
         //                       |                     |
         //                       |                    \|/
         //                      \/                    \/
-        //|| Consumer  ||   0 side               ||  1 side      ||//
+        //|| Consumer  ||   0 side               ||  1 side      ||  do_process //
         //|| mat_list_ ||  kMaxIMages-image_indx ||  image_index_||//
         bool NVTracker::_Capture(cv::Mat& gray){
-            bool res = true;
-
+            bool res = false;
             switch (msg_) {
                 case MSG_FRAME_AVAIABLE:
                 {
-
                     Image *image = &images_[kMaxImages - image_index_];
+
                     LOG_INFO("NVTracker Producer-Consumer Pop Out... %d",
                              kMaxImages - image_index_);
+
+
+                    if(!do_process_)
+                    {
+                        if(image_index_ ==1)
+                        {
+                            do_process_ = true;
+                        }
+                    }
+
                     mat_list_[image_index_] = cv::Mat(image->height_, image->width_, CV_8UC1,
                                                       image->buf_);
+
                     //Next Frame
+                    std::lock_guard<std::mutex> msg_lk(msg_mut_);
                     image_index_ = kMaxImages - image_index_;
+
                     gray = mat_list_[kMaxImages - image_index_];
-                    cv::flip(gray, gray, 0);
+
+
+                    double timestamp = android_app_acquire_tex_timestamp();
+                    LOG_INFO("nv log timestamp tracker consumer %f", image->timestamp_ - timestamp);
+
+                    res = true;
                     msg_ = MSG_NONE;
                 }
                     break;
@@ -194,6 +214,8 @@ namespace nv
                         model_ = 0;
                     }
 
+                    do_process_ = false;
+
                     msg_ = MSG_NONE;
                 }
                     break;
@@ -201,6 +223,7 @@ namespace nv
                     break;
             }
 
+            if(!do_process_)res = false;
 
             return res;
         }
@@ -253,7 +276,7 @@ namespace nv
                 if(!_Capture(gray)) {
                     continue;
                 }
-
+                cv::flip(gray, gray, 0);
 
                 if(!is_pause_)
                 {
@@ -281,7 +304,6 @@ namespace nv
                         {
 
                         }
-
                     }
 
                     if(pop_)
@@ -297,7 +319,7 @@ namespace nv
 
 
                 float  toc = nv::NVClock();
-                //LOG_INFO("NVTracker Run In... %d, %d, %f ms\n", gray.rows, gray.cols, toc-tic);
+                LOG_INFO("NVTracker Run In... %d, %d, %f ms\n", gray.rows, gray.cols, toc-tic);
                 tic = toc;
             }
         }

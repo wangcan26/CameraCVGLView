@@ -92,6 +92,7 @@ namespace nv
 
             bool        start_;
             bool        is_process_;
+            bool        do_process_;
             bool        pop_;
             bool        is_pause_;
 

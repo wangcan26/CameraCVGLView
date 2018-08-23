@@ -76,12 +76,18 @@ void android_app_update_tex_image()
     if(jni_surfacetexture != 0 && request_update_tex)
     {
         kTexTimestamp = (double)(g_env->CallLongMethod(jni_surfacetexture, mid_get_timestamp)/1e6);
-        LOG_INFO("nv log jni update surface texture %f", kTexTimestamp);
+        LOG_INFO("nv log timestamp jni update surface texture %f", kTexTimestamp);
         g_env->CallVoidMethod(jni_surfacetexture, mid_update_tex);
         request_update_tex = false;
     }
 
     DETATCH_JNI_THREAD
+}
+
+
+double android_app_acquire_tex_timestamp()
+{
+    return kTexTimestamp;
 }
 
 jint JNI_OnLoad(JavaVM* vm, void* reserved)

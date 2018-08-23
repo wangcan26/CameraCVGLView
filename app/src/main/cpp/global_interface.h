@@ -15,7 +15,8 @@ extern "C"
     extern UnionJNIEnvToVoid g_uenv;
     extern double kTexTimestamp;
 
-    extern void android_app_update_tex_image();
+    extern void   android_app_update_tex_image();
+    extern double android_app_acquire_tex_timestamp();
 
 #define ATTATCH_JNI_THREAD  g_attatched =  g_vm->AttachCurrentThread(&g_env, NULL);\
             if(g_attatched > 0)\
