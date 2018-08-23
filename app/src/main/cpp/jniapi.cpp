@@ -61,6 +61,7 @@ jstring2str(JNIEnv* env, jstring jstr)
     return   stemp;
 }
 
+//Update by renderer thread manually
 void android_app_update_tex_image()
 {
     ATTATCH_JNI_THREAD
@@ -72,7 +73,7 @@ void android_app_update_tex_image()
 
     g_env = g_uenv.env;
 
-    std::lock_guard<std::mutex> lk(kMutex);
+
     if(jni_surfacetexture != 0 && request_update_tex)
     {
         kTexTimestamp = (double)(g_env->CallLongMethod(jni_surfacetexture, mid_get_timestamp)/1e6);

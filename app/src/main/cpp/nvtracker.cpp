@@ -2,6 +2,7 @@
 #include <chrono>
 #include "nvapp.h"
 #include "nvtracker.h"
+#include "nvrenderer.h"
 #include "logger.h"
 #include "nv_utils.h"
 #include "global_interface.h"
@@ -18,6 +19,7 @@ namespace nv
                 app_path_(path),
                 msg_(MSG_NONE),
                 image_index_(0),
+                last_image_index_(0),
                 start_(true),
                 is_process_(false),
                 do_process_(false),
@@ -73,8 +75,7 @@ namespace nv
 
         bool NVTracker::PushImage(int width, int height, unsigned  char* buf, double timestamp) {
             ///Producer
-            std::lock_guard<std::mutex> msg_lk(msg_mut_);
-            Image *image = &images_[image_index_];  /// 0 side 1 0 1
+            Image *image = &images_[image_index_];  /// 0 side  0 1 0
             if(image->buf_ !=0 )
             {
                 delete image->buf_;
@@ -85,8 +86,17 @@ namespace nv
             image->height_ = height;
             image->timestamp_ = timestamp;
 
+            if(last_image_index_ != image_index_)
+            {
+
+                app_->Render()->SyncTracker();
+                timestamp_ = android_app_acquire_tex_timestamp();
+                LOG_INFO("nv log timestamp tracker image..... %f    %d", timestamp - image->timestamp_ , image_index_);
+                last_image_index_ = image_index_;
+
+            }
+
             //image array has  full images
-            LOG_INFO("NVTracker Producer-Consumer Push In... %d  %f", image_index_, timestamp);
             ///Consumer
             if(!is_process_)
             {
@@ -95,8 +105,13 @@ namespace nv
                     is_process_ = true;
                 }
                 image_index_ = kMaxImages - image_index_;
-
             }
+
+
+
+            LOG_INFO("NVTracker Producer-Consumer Push In... %d  %f", image_index_,
+                     images_[image_index_].timestamp_ - images_[kMaxImages - image_index_].timestamp_);
+
             if(is_process_ && msg_ == MSG_NONE)
             {
                 msg_ = MSG_FRAME_AVAIABLE;
@@ -143,30 +158,32 @@ namespace nv
         //                       |                    \|/
         //                      \/ to gray            \/
         //|| Consumer  ||   0 side               ||  1 side      ||  do_process //
-        //|| mat_list_ ||  kMaxIMages-image_indx ||  image_index_||//
+
         bool NVTracker::_Capture(cv::Mat& gray){
             bool res = false;
             switch (msg_) {
                 case MSG_FRAME_AVAIABLE:
                 {
-                    std::lock_guard<std::mutex> msg_lk(msg_mut_);
-                    Image *image = &images_[kMaxImages - image_index_]; /// 1 side 0 1 0
+                    //std::lock_guard<std::mutex> msg_lk(msg_mut_);
+                    //Next Frame
+                    image_index_ = kMaxImages - image_index_; /// switch to push side  1 0 1
+
+                    Image *image = &images_[kMaxImages - image_index_]; /// pop side 0 1 0 //Get newest image
                     LOG_INFO("NVTracker Producer-Consumer Pop Out... %d",
-                             kMaxImages - image_index_);
+                             image_index_);
                     if(!do_process_)
                     {
-                        if(image_index_ == 1) // 0, 1
+                        if(image_index_ == 0) // 0, 1
                         {
                             do_process_ = true;
                             gray = cv::Mat(image->height_, image->width_, CV_8UC1,
                                            new unsigned char[image->height_*image->width_]);
+                            app_->Render()->StartSync();
                         }
                     }
+
                     cv::Mat frame = cv::Mat(image->height_, image->width_, CV_8UC1,
                                             image->buf_);
-
-                    double timestamp = android_app_acquire_tex_timestamp();
-                    LOG_INFO("nv log timestamp tracker consumer %f", image->timestamp_ - timestamp);
                     if(do_process_)
                     {
                         res = true;
@@ -175,8 +192,6 @@ namespace nv
 
                     if(msg_ != MSG_LOOP_EXIT )
                     {
-                        //Next Frame
-                        image_index_ = kMaxImages - image_index_; /// switch to 1 side 0 1 0
                         msg_ = MSG_NONE;
                     }
                 }
@@ -215,6 +230,11 @@ namespace nv
                     {
                         delete gray.data;
                         gray.data = 0;
+                    }
+
+                    if(app_->Render() != 0)
+                    {
+                        app_->Render()->StopSync();
                     }
 
                     do_process_ = false;
@@ -270,10 +290,10 @@ namespace nv
 
             while(start_)
             {
+                float tic = nv::NVClock();
                 if(!_Capture(gray)) {
                     continue;
                 }
-
                 cv::flip(gray, gray, 0);
 
                 if(!is_pause_)
@@ -314,13 +334,8 @@ namespace nv
                     }
                 }
 
-                float tic = nv::NVClock();
+                LOG_INFO("NVTracker Do Image Process total time %f", NVClock()-tic);
                 float toc = tic;
-                while((toc-tic) <300)
-                {
-                    toc = nv::NVClock();
-                }
-
             }
 
 

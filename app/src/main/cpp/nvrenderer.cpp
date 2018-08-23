@@ -311,7 +311,6 @@ namespace nv
         void NVRenderer::ShutDown() {
             if(!window_init_)return;
             LOG_INFO("nv log renderer Shutdown begin");
-
             if(point_cloud_ != 0)
             {
                 delete point_cloud_;
@@ -368,7 +367,11 @@ namespace nv
         }
 
         void NVRenderer::RenderBackground() {
-            android_app_update_tex_image();
+            if(sync_tracker_ || !is_sync_)
+            {
+                android_app_update_tex_image();
+                sync_tracker_ = false;
+            }
             if(cam_background_ != 0)
                 cam_background_->Render(flip_background_);
         }

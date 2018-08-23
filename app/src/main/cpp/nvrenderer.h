@@ -108,6 +108,9 @@ namespace nv
             std::mutex gl_mut_;
             std::condition_variable gl_cond_;
 
+            std::mutex sync_mut_;
+            std::condition_variable sync_cond_;
+
             int width_;
             int height_;
 
