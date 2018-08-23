@@ -261,7 +261,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             Image image = imageReader.acquireLatestImage();
             if(image != null)
             {
-                Log.i("CameraRenderView", "CameraRenderView Frame Image " + image.getTimestamp()/1e6);
+                Log.i("CameraRenderView", "nv log timestamp Image java" + (double)image.getTimestamp()/1e6);
                 imageToYBytes(image);
                 image.close();
             }
@@ -750,7 +750,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
                 @Override
                 public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-                    Log.i("CameraRenderView", "CameraRenderView Frame tex " + surfaceTexture.getTimestamp()/1e6);
+                    Log.i("CameraRenderView", "nv log timestamp tex java " + (double)surfaceTexture.getTimestamp()/1e6);
                     nativeRequestUpdateTexture();
                 }
             });

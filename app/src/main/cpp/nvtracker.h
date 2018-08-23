@@ -97,7 +97,7 @@ namespace nv
             bool        is_pause_;
 
             double      timestamp_;
-            double      last_image_index_;
+            int         last_image_index_;
 
             bool       cam_configured_;
 
