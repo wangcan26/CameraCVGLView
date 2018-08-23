@@ -68,7 +68,7 @@ namespace nv
             msg_ = MSG_WAIT_READY;
         }
 
-        bool NVTracker::PushImage(int width, int height, unsigned  char* buf) {
+        bool NVTracker::PushImage(int width, int height, unsigned  char* buf, double timestamp) {
             ///Producer
             Image *image = &images_[image_index_];
 
@@ -81,10 +81,10 @@ namespace nv
 
             image->width_ = width;
             image->height_ = height;
-
+            image->timestamp_ = timestamp;
 
             //image array has  full images
-            LOG_INFO("NVTracker Producer-Consumer Push In... %d  %d", image_index_, msg_);
+            LOG_INFO("NVTracker Producer-Consumer Push In... %d  %f", image_index_, timestamp);
 
             ///Consumer
             if(!is_process_)
@@ -134,7 +134,19 @@ namespace nv
             tl_lk.unlock();
         }
 
-
+        ////////////////////////////////////////////////////////////
+        //                    |                   \|/             ||//
+        //                   \/                   \/
+        //|| Processor ||   0 side    ||       1 side           ||//
+        //|| Producer  ||   0 side    ||       1 side           ||//
+        //|| images_   || image_index || kMaxImages- image_index||//
+        //                   |    __________________|             //
+        //                   |___|____________________
+        //                       |                     |
+        //                       |                    \|/
+        //                      \/                    \/
+        //|| Consumer  ||   0 side               ||  1 side      ||//
+        //|| mat_list_ ||  kMaxIMages-image_indx ||  image_index_||//
         bool NVTracker::_Capture(cv::Mat& gray){
             bool res = true;
 
