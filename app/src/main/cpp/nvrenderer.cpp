@@ -9,6 +9,7 @@
 #include "logger.h"
 #include "global_interface.h"
 #include "nv_cam_background.h"
+#include "nv_point_cloud.h"
 
 #define LOG_TAG "NVRenderer"
 
@@ -20,15 +21,19 @@ namespace nv
                 app_(app),
                 msg_(MSG_NONE),
                 window_(0),
+                points_lock_(false),
                 display_(0),
                 surface_(0),
                 context_(0),
                 config_(0),
                 cam_background_(0),
+                point_cloud_(0),
                 width_(0),
                 height_(0),
                 surface_texture_id_(0),
                 flip_background_(false),
+                sync_tracker_(false),
+                is_sync_(false),
                 window_init_(false),
                 pause_(false),
                 run_(true)
@@ -185,14 +190,15 @@ namespace nv
             win_lk.unlock();
 
             //Wait for camera session ready
-            LOG_INFO("nv log renderer initialise wait for camera ready");
+            LOG_INFO("nv log renderer initialise surface size %d, %d\n", width_, height_);
             /*std::unique_lock<std::mutex> gl_lk(gl_mut_);
             gl_cond_.wait(gl_lk);
             gl_lk.unlock();*/
-            LOG_INFO("nv log renderer initialise wait for camera ready end");
+
 
             //Create camera background
             cam_background_ = new NVCameraBackground(this);
+            point_cloud_ = new NVPointCloud(this);
 
             std::unique_lock<std::mutex> msg_lk(msg_mut_);
             if(msg_ == MSG_WINDOW_CREATE)
@@ -219,6 +225,31 @@ namespace nv
                 glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             }
+        }
+
+        void NVRenderer::StartSync() {
+            is_sync_ = true;
+        }
+
+        void NVRenderer::StopSync() {
+            is_sync_ = false;
+        }
+
+       void NVRenderer::SyncTracker() {
+           sync_tracker_ = true;
+       }
+
+       void NVRenderer::OnReceivePointCloud(const std::vector<float>& point_cloud) {
+            points_.clear();
+            points_ = point_cloud;
+        }
+
+        void NVRenderer::GetPointCloudNum(int *len) {
+            *len = points_.size()/2;
+        }
+
+        void NVRenderer::GetPointCloudPoints(float **points) {
+            *points = points_.data();
         }
 
         void NVRenderer::FlipBackground(bool flip) {
@@ -281,6 +312,14 @@ namespace nv
             if(!window_init_)return;
             LOG_INFO("nv log renderer Shutdown begin");
 
+            if(point_cloud_ != 0)
+            {
+                delete point_cloud_;
+                point_cloud_ = 0;
+                points_.clear();
+            }
+
+
             if(cam_background_ != 0)
             {
                 delete cam_background_;
@@ -324,12 +363,22 @@ namespace nv
             glViewport(0, 0, width_, height_);
 
             RenderBackground();
+            RenderPointCloud();
+
         }
 
         void NVRenderer::RenderBackground() {
             android_app_update_tex_image();
             if(cam_background_ != 0)
                 cam_background_->Render(flip_background_);
+        }
+
+
+        void NVRenderer::RenderPointCloud() {
+            if(point_cloud_ != 0)
+            {
+                point_cloud_->Render();
+            }
         }
 
         void NVRenderer::SwapBuffers() {

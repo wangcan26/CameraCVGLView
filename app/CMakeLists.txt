@@ -21,6 +21,7 @@ add_library( # Sets the name of the library.
              src/main/cpp/nvapp.cpp
              src/main/cpp/nvrenderer.cpp
              src/main/cpp/nv_cam_background.cpp
+             src/main/cpp/nv_point_cloud.cpp
              src/main/cpp/nvtracker.cpp)
 
 # Searches for a specified prebuilt library and stores the path as a

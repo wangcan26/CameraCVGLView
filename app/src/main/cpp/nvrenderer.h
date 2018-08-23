@@ -5,12 +5,14 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #include <condition_variable>
+#include <vector>
 
 namespace nv
 {
     class NVApp;
     namespace render
     {
+        class NVPointCloud;
         class NVCameraBackground;
         class NVRenderer
         {
@@ -31,6 +33,14 @@ namespace nv
             void NotifyCameraReady();
 
             GLuint GetSurfaceTextureId(){return surface_texture_id_;}
+
+            void StartSync();
+            void SyncTracker();
+            void StopSync();
+            void OnReceivePointCloud(const std::vector<float>& point_cloud);
+
+            void GetPointCloudNum(int *len);
+            void GetPointCloudPoints(float **points);
 
             void CheckGlError(const char *op);
 
@@ -53,6 +63,8 @@ namespace nv
             void DrawFrame();
 
             void RenderBackground();
+
+            void RenderPointCloud();
 
             void SwapBuffers();
 
@@ -84,10 +96,15 @@ namespace nv
             EGLConfig  config_;
 
             NVCameraBackground *cam_background_;
+            NVPointCloud       *point_cloud_;
+            std::vector<float>  points_;
+            bool                points_lock_;
 
             std::mutex msg_mut_;
+
             std::mutex win_mut_;
             std::condition_variable win_cond_;
+
             std::mutex gl_mut_;
             std::condition_variable gl_cond_;
 
@@ -96,6 +113,9 @@ namespace nv
 
             GLuint surface_texture_id_;
             bool flip_background_;
+            bool sync_tracker_;
+            bool is_sync_;
+
 
             bool window_init_;
             bool pause_;
