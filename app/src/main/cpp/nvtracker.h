@@ -96,6 +96,8 @@ namespace nv
             bool        pop_;
             bool        is_pause_;
 
+            double      timestamp_;
+
             bool       cam_configured_;
 
             // Related args about tracker
