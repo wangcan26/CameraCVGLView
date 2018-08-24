@@ -50,7 +50,6 @@ namespace nv
 
             float *point_cloud_data;
             renderer_->GetPointCloudPoints(&point_cloud_data);
-            LOG_INFO("NVPointCloud Render num_of_points %f, %f", point_cloud_data[0], point_cloud_data[1]);
 
             glEnableVertexAttribArray(position_handle_);
             glVertexAttribPointer(position_handle_, 2, GL_FLOAT, GL_FALSE, 0, point_cloud_data);

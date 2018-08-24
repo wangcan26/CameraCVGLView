@@ -29,8 +29,7 @@ namespace nv
                 cam_configured_(false),
                 model_(0)
         {
-            //Read files into tracker
-            _ProcessIO(app_path_);
+
         }
 
         NVTracker::~NVTracker() {
@@ -74,31 +73,23 @@ namespace nv
         }
 
         bool NVTracker::PushImage(int width, int height, unsigned  char* buf, double timestamp) {
-            if(last_image_index_ != image_index_)
+            ///Producer
+            Image *image = &images_[image_index_];  /// 0 side  0 1 0
+            if(image->buf_ !=0 )
             {
-                ///Producer
-                Image *image = &images_[image_index_];  /// 0 side  0 1 0
-                if(image->buf_ !=0 )
-                {
-                    delete image->buf_;
-                    image->buf_ = 0;
-                }
-                image->buf_ = buf;
-                image->width_ = width;
-                image->height_ = height;
-                image->timestamp_ = timestamp;
-
-
-                last_image_index_ = image_index_;
-                if(app_->Render() != 0)
-                {
-                    app_->Render()->SyncTracker(); // Syn next frame
-                }
-
-                LOG_INFO("nv log timestamp image tracker Push In... %d  %f", image_index_,
-                         images_[image_index_].timestamp_);
-
+                delete image->buf_;
+                image->buf_ = 0;
             }
+            image->buf_ = buf;
+            image->width_ = width;
+            image->height_ = height;
+            image->timestamp_ = timestamp;
+
+
+            last_image_index_ = image_index_;
+
+            LOG_INFO("nv log timestamp image tracker Push In... %d  %f", image_index_,
+                     images_[image_index_].timestamp_);
 
             //image array has  full images
             ///Consumer
@@ -170,6 +161,8 @@ namespace nv
 
                     Image *image = &images_[kMaxImages - image_index_]; /// pop side 0 1 0 //Get newest image
                     timestamp_ = image->timestamp_;
+
+                    LOG_INFO("NVTracker Do Image Process total time %f ", timestamp_ - android_app_acquire_tex_timestamp());
 
 
                     LOG_INFO("nv log timestamp image Pop Out... %d %f",
@@ -278,6 +271,11 @@ namespace nv
                 msg_ = MSG_WAIT_READY;
             msg_lk.unlock();
 
+            //init
+            bool fcheck = false; int fpd = -1;
+
+            //Read files into tracker
+            _ProcessIO(app_path_);
 
             // init vars and set other tracking parameters
             std::vector<int> w_size1(1); w_size1[0] = 7;
@@ -323,9 +321,70 @@ namespace nv
 
                         if(model_->_shape.at<double>(8+n, 0) > gray.rows -0.5)
                         {
+                            if(model_->_shape.at<double>(8+n, 0) > gray.rows)
+                                bottom = gray.rows;
+                            else bottom = model_->_shape.at<double>(8+n, 0);
+                        }else bottom = model_->_shape.at<double>(8+n, 0) + 20;
 
+
+                        if(model_->_shape.at<double>(19+n, 0) < 10.5)
+                        {
+                            if(model_->_shape.at<double>(19+n, 0) < 0)
+                                top =  0;
+                            else top = model_->_shape.at<double>(19+n, 0);
+                        }else top = model_->_shape.at<double>(19+n, 0) -10;
+
+                        cv::Rect facereg(cv::Point(left, top), cv::Point(right, bottom));
+                        cv::Mat roi;
+                        try{
+                            roi = gray(facereg);
+                        }catch (...){
+                            LOG_ERROR("Lost track at:\n (%.4f, %.4f)", left, top);
+                            LOG_ERROR("Lost track at:\n (%.4f, %.4f)", right, bottom);
+                        }
+                        cv::rectangle(gray, facereg, cv::Scalar(0, 0, 0));
+                        cv::equalizeHist(roi, roi);
+                    }
+
+
+                    std::vector<int> w_size; if(falied)w_size = w_size2; else w_size = w_size1;
+                    if(model_->Track(gray, w_size, fpd, n_iter, clamp, f_tol, fcheck) == 0)
+                    {
+                        int idx = model_->_clm.GetViewIdx(); falied = false;
+                        int i, n = model_->_shape.rows/2;
+
+                        std::vector<float> points;
+                        for(int i = 0; i < n; i++)
+                        {
+                            if(model_->_clm._visi[idx].at<int>(i, 0) == 0) continue;
+                            float x = 2*model_->_shape.at<double>(i, 0)/gray.cols - 1;
+                            float y = 1 - 2*model_->_shape.at<double>(i+n, 0)/gray.rows;
+                            points.push_back(x);
+                            points.push_back(y);
+                            LOG_INFO("NVTracker Draw On Image point %d %f, %f",i, x, y);
+                        }
+                        if(app_->Render() !=  0)
+                        {
+                            app_->Render()->OnReceivePointCloud(points);
+                        }
+                        //_DrawOnImage(gray, model_->_shape, model_->_clm._visi[idx]);
+
+                    }else{
+                        model_->FrameReset(); falied = true;
+                    }
+
+                    if(falied){
+                        if(app_->Render() != 0)
+                        {
+                            app_->Render()->StopSync();
+                        }
+                    }else{
+                        if(app_->Render() != 0)
+                        {
+                            app_->Render()->StartSync();
                         }
                     }
+
 
                     if(pop_)
                     {
@@ -336,20 +395,15 @@ namespace nv
                         lk.unlock();
                     }
                 }
-                float tic = nv::NVClock();
-                float toc = tic;
 
 
-                while(toc-tic < 100)
+                if(app_->Render() != 0)
                 {
-                    toc = NVClock();
+                    app_->Render()->SyncTracker(); // Syn next frame
                 }
 
-
-                LOG_INFO("NVTracker Do Image Process total time %f ", timestamp_ - android_app_acquire_tex_timestamp());
-
-
-
+                float tic = nv::NVClock();
+                float toc = tic;
             }
 
 
