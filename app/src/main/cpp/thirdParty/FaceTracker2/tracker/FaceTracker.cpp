@@ -19,7 +19,7 @@
 
 #include <tracker/IO.hpp>
 #include <tracker/myFaceTracker.hpp>
-#include <tracker/Config.h>
+#include <Config.h>
 #include <tracker/ShapeModel.hpp>
 
 using namespace FACETRACKER;
@@ -50,8 +50,8 @@ FaceTracker* FACETRACKER::LoadFaceTracker(const char* fname)
       model = new myFaceTracker(fname, true);
     }
     else
-      printf("ERROR(%s,%d) : unknown facetracker type %d\n", 
-	     __FILE__,__LINE__,type);
+      LOG_ERROR("ERROR(%s,%d) : unknown facetracker type %d\n",
+                __FILE__,__LINE__,type);
   }return model;
 }
 //============================================================================
@@ -70,42 +70,22 @@ FaceTrackerParams * FACETRACKER::LoadFaceTrackerParams(const char* fname)
     if(type == IOBinary::MYFACETRACKERPARAMS)
       model = new myFaceTrackerParams(fname, true);
     else
-      printf("ERROR(%s,%d) : unknown facetracker parameter type %d\n", 
-	     __FILE__,__LINE__,type);
+      LOG_ERROR("ERROR(%s,%d) : unknown facetracker parameter type %d\n",
+                __FILE__,__LINE__,type);
   }return model;
 }
 //============================================================================
 
-std::string
-FACETRACKER::DefaultFaceTrackerModelPathname()
-{
-  char *v = getenv("CSIRO_FACE_TRACKER_MODEL_PATHNAME");
-  if (v)
-    return v;
-  else
-    return FACETRACKER_DEFAULT_MODEL_PATHNAME;
-}
-
-std::string
-FACETRACKER::DefaultFaceTrackerParamsPathname()
-{
-  char *v = getenv("CSIRO_FACE_TRACKER_PARAMS_PATHNAME");
-  if (v)
-    return v;
-  else
-    return FACETRACKER_DEFAULT_PARAMS_PATHNAME;
-}
-
 FaceTracker *
 FACETRACKER::LoadFaceTracker()
 {
-  return LoadFaceTracker(DefaultFaceTrackerModelPathname().c_str());
+  return LoadFaceTracker(Configure::GetSingleton().GetModelPathName().c_str());
 }
 
 FaceTrackerParams *
 FACETRACKER::LoadFaceTrackerParams()
 {
-  return LoadFaceTrackerParams(DefaultFaceTrackerParamsPathname().c_str());
+  return LoadFaceTrackerParams(Configure::GetSingleton().GetParamsPathName().c_str());
 }
 
 // Compute the vectors for each axis i.e. x-axis, y-axis then

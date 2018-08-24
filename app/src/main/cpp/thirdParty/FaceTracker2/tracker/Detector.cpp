@@ -137,7 +137,7 @@ Detector::getResponsesForRefShape(cv::Mat r, double *sc_)
     double theta, scale;
     Align2DShapes(sh, _refs_zm, scale, theta);
     if(fabs(theta) > .1){
-      std::cerr << "Reference shapes can only differ in scale" << std::endl;
+      LOG_ERROR("Reference shapes can only differ in scale");
       exit(-1);
     }
     if(sc_) *sc_ = scale;
@@ -163,7 +163,7 @@ Detector::getResponsesForRefShape(cv::Size wSize, cv::Mat r)
     double theta, scale;
     Align2DShapes(sh, _refs_zm, scale, theta);
     if(fabs(theta) > .1){
-      std::cerr << "Reference shapes can only differ in scale" << std::endl;
+      LOG_ERROR("Reference shapes can only differ in scale");
       exit(-1);
     }
     if(fabs(scale-1.)<1e-2)
@@ -299,8 +299,7 @@ DetectorNCC::Write(std::ofstream &s, bool binary)
 void
 DetectorNCC::Read(std::ifstream &, bool)
 {
-  std::cerr << "Reading DetectorNCC objects from text files is not supported" 
-	    << std::endl;
+  LOG_ERROR("Reading DetectorNCC objects from text files is not supported" );
   exit(-1);
 }
 

@@ -27,8 +27,8 @@ vector<string> IO::GetList(const char* fname)
   vector<string> names(0); string str;
   fstream file(fname,fstream::in);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening file %s for reading\n", 
-	   __FILE__,__LINE__,fname); abort();
+      LOG_ERROR("ERROR(%s,%d) : Failed opening file %s for reading\n",
+                __FILE__,__LINE__,fname);abort();
   }
   while(!file.eof()){
     getline(file,str); if(str.length() < 2)continue; names.push_back(str);
@@ -62,8 +62,8 @@ void IO::ReadMat(ifstream& s,cv::Mat &M)
       while(i1 != i2)s >> *i1++;
     }break;
   default:
-    printf("ERROR(%s,%d) : Unsupported Matrix type %d!\n", 
-	   __FILE__,__LINE__,M.type()); abort();
+    LOG_ERROR("ERROR(%s,%d) : Unsupported Matrix type %d!\n",
+              __FILE__,__LINE__,M.type()); abort();
   }return;
 }
 //===========================================================================
@@ -93,8 +93,8 @@ void IO::WriteMat(ofstream& s,cv::Mat &M)
       while(i1 != i2)s << *i1++ << " ";
     }break;
   default:
-    printf("ERROR(%s,%d) : Unsupported Matrix type %d!\n", 
-	   __FILE__,__LINE__,M.type()); abort();
+    LOG_ERROR("ERROR(%s,%d) : Unsupported Matrix type %d!\n",
+              __FILE__,__LINE__,M.type()); abort();
   }return;
 }
 //===========================================================================
@@ -102,8 +102,8 @@ cv::Mat IO::LoadCon(const char* fname)
 {
   int i,n; char str[256]; char c; fstream file(fname,fstream::in);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening file %s for reading\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening file %s for reading\n",
+              __FILE__,__LINE__,fname); abort();
   }
   while(1){file >> str; if(strncmp(str,"n_connections:",14) == 0)break;}
   file >> n; cv::Mat con(2,n,CV_32S);
@@ -116,8 +116,8 @@ cv::Mat IO::LoadTri(const char* fname)
 {
   int i,n; char str[256]; char c; fstream file(fname,fstream::in);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening file %s for reading\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening file %s for reading\n",
+              __FILE__,__LINE__,fname); abort();
   }
   while(1){file >> str; if(strncmp(str,"n_tri:",6) == 0)break;}
   file >> n; cv::Mat tri(n,3,CV_32S);
@@ -132,8 +132,8 @@ cv::Mat IO::LoadVis(const char* fname)
   int i,n; char str[256]; char c;
   fstream file(fname,fstream::in);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening shape file %s for reading!\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening shape file %s for reading!\n",
+              __FILE__,__LINE__,fname); abort();
   }
   while(!file.eof()){file >> str; if(strncmp(str,"n_points:",9) == 0)break;}
   file >> n; cv::Mat shape(n,1,CV_32S);
@@ -147,8 +147,8 @@ cv::Mat IO::LoadPts(const char* fname)
   int i,n; char str[256]; char c;
   fstream file(fname,fstream::in);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening shape file %s for reading!\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening shape file %s for reading!\n",
+              __FILE__,__LINE__,fname); abort();
   }
   while(!file.eof()){file >> str; if(strncmp(str,"n_points:",9) == 0)break;}
   file >> n; cv::Mat shape(2*n,1,CV_64F);
@@ -162,8 +162,8 @@ cv::Mat IO::LoadPts3D(const char* fname)
   int i,n; char str[256]; char c;
   fstream file(fname,fstream::in);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening shape file %s for reading!\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening shape file %s for reading!\n",
+              __FILE__,__LINE__,fname); abort();
   }
   while(!file.eof()){file >> str; if(strncmp(str,"n_points:",9) == 0)break;}
   file >> n; cv::Mat shape(3*n,1,CV_64F);
@@ -179,8 +179,8 @@ void IO::SavePts(const char* fname,cv::Mat &pts)
 {
  int i,n = pts.rows/2; fstream file(fname,fstream::out);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening pts file %s for writing!\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening pts file %s for writing!\n",
+              __FILE__,__LINE__,fname); abort();
   }
   file << "n_points: " << n << "\n{\n";
   for(i = 0; i < n; i++){
@@ -206,8 +206,8 @@ void IO::SavePts3D(const char* fname,cv::Mat &pts)
 {
  int i,n = pts.rows/3; fstream file(fname,fstream::out);
   if(!file.is_open()){
-    printf("ERROR(%s,%d) : Failed opening pts file %s for writing!\n", 
-	   __FILE__,__LINE__,fname); abort();
+    LOG_ERROR("ERROR(%s,%d) : Failed opening pts file %s for writing!\n",
+              __FILE__,__LINE__,fname); abort();
   }
   file << "n_points: " << n << "\n{\n";
   for(i = 0; i < n; i++){
@@ -240,7 +240,7 @@ void IOBinary::ReadMat(std::ifstream &s, cv::Mat &M)
 	s.read(reinterpret_cast<char*>(const_cast<uchar*>(M.datastart)), M.total()*M.elemSize());
 	
 	if(!s.good()){
-	  std::cout << "Error reading matrix" << std::endl;
+        LOG_ERROR( "Error reading matrix");
 	}
 
 	//	std::cout << "Mat read: "<< r << "x"<<c << ", type " << t << std::endl; 

@@ -3,7 +3,6 @@
 #include <thread>
 #include <condition_variable>
 #include <opencv2/highgui.hpp>
-#include <FaceTracker/Tracker.h>
 
 
 namespace nv
@@ -60,19 +59,6 @@ namespace nv
 
             void _PopImage(const cv::Mat& image);
 
-            void _DrawOnImage(cv::Mat &image, cv::Mat &shape, cv::Mat &visi)
-            {
-                int i,n = shape.rows/2; cv::Point p1,p2; cv::Scalar c;
-
-                //draw points
-                for(i = 0; i < n; i++)
-                {
-                    if(visi.at <int>(i,0) == 0)continue;
-                    p1 = cv::Point(shape.at<double>(i,0), shape.at<double>(i+n,0));
-                    c = CV_RGB(0,0,255); cv::circle(image,p1,3,c);
-                }return;
-            }
-
         private:
 
             enum TrackerMessage{
@@ -83,7 +69,6 @@ namespace nv
             };
 
             std::mutex msg_mut_;
-
 
             std::mutex pc_mut_;
             std::condition_variable pc_cond_;
@@ -115,7 +100,7 @@ namespace nv
             bool       cam_configured_;
 
             // Related args about tracker
-            FACETRACKER::Tracker   *model_;
+
 
         };
     }

@@ -224,8 +224,8 @@ void ATM::BuildLinearSystem(cv::Mat &im,cv::Mat &s,
     }
   }
   if(sum < 1e-8){
-    printf("ERROR(%s,%d): Weights are too small: %f!\n",
-	   __FILE__,__LINE__,(float)sum); abort();
+    LOG_ERROR("ERROR(%s,%d): Weights are too small: %f!\n",
+              __FILE__,__LINE__,(float)sum); abort();
   }
   e /= sum; vecw__ = cv::Scalar(0); k = 0;
   for(int i = 0; i < int(_T.size()); i++){

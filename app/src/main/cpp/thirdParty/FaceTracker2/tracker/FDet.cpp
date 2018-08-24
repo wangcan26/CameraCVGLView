@@ -48,8 +48,8 @@ void FDet::Init(const char* fname,
 		const int    min_size)
 {
   if(!(_cascade = (CvHaarClassifierCascade*)cvLoad(fname,0,0,0))){
-    printf("ERROR(%s,%d) : Failed loading classifier cascade!\n",
-	   __FILE__,__LINE__); abort();
+      LOG_ERROR("ERROR(%s,%d) : Failed loading classifier cascade!\n",
+                __FILE__,__LINE__);abort();
   }
   storage_        = cvCreateMemStorage(0);
   _img_scale      = img_scale;

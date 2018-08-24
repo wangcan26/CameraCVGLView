@@ -293,7 +293,7 @@ void PAW::Vectorize(cv::Mat &img,cv::Mat &vec)
       for(i=0;i<_h;i++){for(j=0;j<_w;j++,++mp,++cp){if(*mp)*vp++=(double)*cp;}}
       break;
     }
-  default: printf("Unsupported image type %d!",img.type()); abort();
+  default: LOG_ERROR("Unsupported image type %d!",img.type()); abort();
   }return;
 
   /*

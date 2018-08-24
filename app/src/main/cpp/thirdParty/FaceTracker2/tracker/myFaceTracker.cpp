@@ -446,7 +446,7 @@ myFaceTracker::NewFrame(cv::Mat &im,
          _clm.Fit(gray_,p->init_wSize,p->itol,p->clamp,p->ftol);
     }
     else{
-      std::cerr << "Bad init_type "<<p->init_type << ". init_type should be 0" << std::endl;
+      LOG_ERROR("Bad init_type %d. init_type should be 0", p->init_type);
       abort();
     }
     //   myInitData data; data.calculate = true; 

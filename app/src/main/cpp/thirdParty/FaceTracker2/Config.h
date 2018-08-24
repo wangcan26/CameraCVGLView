@@ -20,17 +20,41 @@
 #ifndef _FACETRACKER_CONFIG_HPP_
 #define _FACETRACKER_CONFIG_HPP_
 
+#include <string>
+
 #define FACETRACKER_DEFAULT_FACE_CON_PATHNAME ""
 #define FACETRACKER_DEFAULT_MODEL_PATHNAME    "@SDK_FACETRACKER_DEFAULT_MODEL_PATHNAME@"
 #define FACETRACKER_DEFAULT_PARAMS_PATHNAME   "@SDK_FACETRACKER_DEFAULT_PARAMS_PATHNAME@"
 
-namespace FACETRACKER
+class Configure
 {
-    class Configure
-    {
+public:
+    Configure();
 
-    };
-}
+    ~Configure();
+
+    static Configure& GetSingleton();
+
+    static Configure* GetSingletonPtr();
+
+    void Init(const std::string& path);
+
+    std::string GetModelPathName();
+
+    std::string GetParamsPathName();
+
+private:
+    static Configure *kSingleton;
+
+private:
+    std::string path_;
+
+private:
+    Configure(const Configure&);
+    Configure&operator=(const Configure&);
+
+};
+
 
 
 

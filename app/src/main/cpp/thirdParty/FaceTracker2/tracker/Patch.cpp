@@ -41,9 +41,9 @@ void sum2one(cv::Mat &M)
       for(int j = 0; j < cols; j++)sum += *Mi++;
     }
     M /= sum; 
-  }else{    
-    printf("ERROR(%s,%d): Unsupported patch type %d!\n",
-	   __FILE__,__LINE__,M.type()); abort();
+  }else{
+    LOG_ERROR("ERROR(%s,%d): Unsupported patch type %d!\n",
+              __FILE__,__LINE__,M.type());abort();
   }return;
 }
 //===========================================================================
@@ -181,8 +181,8 @@ void Patch::Response(cv::Mat &im,cv::Mat &resp)
     if     (_t == 1)Grad(im,I);
     else if(_t == 2)LBP(im,I);
     else{
-      printf("ERROR(%s,%d): Unsupported patch type %d!\n",
-	     __FILE__,__LINE__,_t); abort();
+      LOG_ERROR("ERROR(%s,%d): Unsupported patch type %d!\n",
+                __FILE__,__LINE__,_t);abort();
     }
   }
   cv::matchTemplate(I,_W,res_,CV_TM_CCOEFF_NORMED);
@@ -203,9 +203,9 @@ MPatch& MPatch::operator= (MPatch const& rhs)
 {   
   _w = rhs._p[0]._W.cols; _h = rhs._p[0]._W.rows;
   for(size_t i = 1; i < rhs._p.size(); i++){
-    if((rhs._p[i]._W.cols != _w) || (rhs._p[i]._W.rows != _h)){      
-      printf("ERROR(%s,%d): Incompatible patch sizes!\n",
-	     __FILE__,__LINE__); abort();
+    if((rhs._p[i]._W.cols != _w) || (rhs._p[i]._W.rows != _h)){
+      LOG_ERROR("ERROR(%s,%d): Incompatible patch sizes!\n",
+                __FILE__,__LINE__);abort();
     }
   }
   _p = rhs._p; return *this;
@@ -215,9 +215,9 @@ void MPatch::Init(std::vector<Patch> &p)
 {
   _w = p[0]._W.cols; _h = p[0]._W.rows;
   for(size_t i = 1; i < p.size(); i++){
-    if((p[i]._W.cols != _w) || (p[i]._W.rows != _h)){      
-      printf("ERROR(%s,%d): Incompatible patch sizes!\n",
-	     __FILE__,__LINE__); abort();
+    if((p[i]._W.cols != _w) || (p[i]._W.rows != _h)){
+      LOG_ERROR("ERROR(%s,%d): Incompatible patch sizes!\n",
+                __FILE__,__LINE__);abort();
     }
   }
   _p = p; return;

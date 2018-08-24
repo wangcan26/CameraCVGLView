@@ -4,8 +4,9 @@ file(GLOB SOURCE_FILES
 	*.cpp
 )
 
-add_library(clmtracker STATIC ${SOURCE_FILES})
+set(SOURCE_FILES ${SOURCE_FILES} "../Config.cpp")
 
+add_library(clmtracker STATIC ${SOURCE_FILES})
 
 target_link_libraries( # Specifies the target library.
                        clmtracker
