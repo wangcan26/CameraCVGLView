@@ -88,6 +88,7 @@ set(OPENCV_THIRD_LIBS lib_jasper lib_jpeg lib_png lib_protobuf lib_tiff lib_tbb 
 include_directories(${ThirdParty_OPENCV}/include)
 
 add_subdirectory(${ThirdParty_DIR}/cpufeatures)
+add_subdirectory(${ThirdParty_DIR}/FaceTracker2)
 add_subdirectory(${ThirdParty_DIR}/FaceTracker)
 
 
