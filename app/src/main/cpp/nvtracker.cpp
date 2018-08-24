@@ -74,6 +74,15 @@ namespace nv
 
         bool NVTracker::PushImage(int width, int height, unsigned  char* buf, double timestamp) {
             ///Producer
+
+            if(last_image_index_ != image_index_)
+            {
+                if(app_->Render() != 0)
+                {
+                    app_->Render()->SyncTracker(); // Syn next frame
+                }
+                last_image_index_ = image_index_;
+            }
             Image *image = &images_[image_index_];  /// 0 side  0 1 0
             if(image->buf_ !=0 )
             {
@@ -86,7 +95,6 @@ namespace nv
             image->timestamp_ = timestamp;
 
 
-            last_image_index_ = image_index_;
 
             LOG_INFO("nv log timestamp image tracker Push In... %d  %f", image_index_,
                      images_[image_index_].timestamp_);
@@ -158,10 +166,7 @@ namespace nv
                     //std::lock_guard<std::mutex> msg_lk(msg_mut_);
                     //Next Frame
                     image_index_ = kMaxImages - image_index_; /// switch to push side  1 0 1
-                    if(app_->Render() != 0)
-                    {
-                        app_->Render()->SyncTracker(); // Syn next frame
-                    }
+
 
                     Image *image = &images_[kMaxImages - image_index_]; /// pop side 0 1 0 //Get newest image
                     timestamp_ = image->timestamp_;
@@ -402,6 +407,7 @@ namespace nv
 
                 float tic = nv::NVClock();
                 float toc = tic;
+
             }
 
 
