@@ -78,7 +78,7 @@ void android_app_update_tex_image()
     {
         g_env->CallVoidMethod(jni_surfacetexture, mid_update_tex);
         kTexTimestamp = (double)(g_env->CallLongMethod(jni_surfacetexture, mid_get_timestamp)/1e6);
-        LOG_INFO("nv log timestamp tex jni update  %f", kTexTimestamp);
+        LOG_INFO("nv log timestamp Test tex jni update  %f", kTexTimestamp);
         request_update_tex = false;
     }
 

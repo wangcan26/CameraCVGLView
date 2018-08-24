@@ -261,7 +261,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             Image image = imageReader.acquireLatestImage();
             if(image != null)
             {
-                Log.i("CameraRenderView", "nv log timestamp CameraRenderView Image java" + (double)image.getTimestamp()/1e6);
+                Log.i("CameraRenderView", "nv log timestamp Test CameraRenderView Image java" + (double)image.getTimestamp()/1e6);
                 imageToYBytes(image);
                 image.close();
             }
