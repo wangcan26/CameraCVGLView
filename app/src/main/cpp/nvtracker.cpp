@@ -158,6 +158,10 @@ namespace nv
                     //std::lock_guard<std::mutex> msg_lk(msg_mut_);
                     //Next Frame
                     image_index_ = kMaxImages - image_index_; /// switch to push side  1 0 1
+                    if(app_->Render() != 0)
+                    {
+                        app_->Render()->SyncTracker(); // Syn next frame
+                    }
 
                     Image *image = &images_[kMaxImages - image_index_]; /// pop side 0 1 0 //Get newest image
                     timestamp_ = image->timestamp_;
@@ -394,12 +398,6 @@ namespace nv
                         pc_cond_.notify_one();
                         lk.unlock();
                     }
-                }
-
-
-                if(app_->Render() != 0)
-                {
-                    app_->Render()->SyncTracker(); // Syn next frame
                 }
 
                 float tic = nv::NVClock();
