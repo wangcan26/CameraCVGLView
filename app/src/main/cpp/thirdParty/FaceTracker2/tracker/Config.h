@@ -24,6 +24,19 @@
 #define FACETRACKER_DEFAULT_MODEL_PATHNAME    "@SDK_FACETRACKER_DEFAULT_MODEL_PATHNAME@"
 #define FACETRACKER_DEFAULT_PARAMS_PATHNAME   "@SDK_FACETRACKER_DEFAULT_PARAMS_PATHNAME@"
 
+namespace FACETRACKER
+{
+    class Configure
+    {
+
+    };
+}
+
+
+
+
+
+
 #endif
 
 // Local Variables:

@@ -7,9 +7,6 @@ file(GLOB SOURCE_FILES
 add_library(clmtracker STATIC ${SOURCE_FILES})
 
 
-target_include_directories(clmtracker PUBLIC ${ThirdParty_DIR}/FaceTracker2)
-
-
 target_link_libraries( # Specifies the target library.
                        clmtracker
                        # Links the target library to the log library

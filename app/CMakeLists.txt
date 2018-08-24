@@ -86,6 +86,7 @@ set(OPENCV_LIBS  opencv_videoio opencv_objdetect opencv_highgui opencv_imgproc  
 set(OPENCV_THIRD_LIBS lib_jasper lib_jpeg lib_png lib_protobuf lib_tiff lib_tbb lib_tegra_hal)
 
 include_directories(${ThirdParty_OPENCV}/include)
+include_directories(${ThirdParty_DIR}/FaceTracker2)
 
 add_subdirectory(${ThirdParty_DIR}/cpufeatures)
 add_subdirectory(${ThirdParty_DIR}/FaceTracker2)
