@@ -38,6 +38,7 @@ FaceTracker::~FaceTracker()
 FaceTracker* FACETRACKER::LoadFaceTracker(const char* fname)
 {
   int type; FaceTracker* model=NULL;
+  LOG_INFO("FaceTracker LoadFaceTracker model name %s\n", fname);
   ifstream file(fname); assert(file.is_open()); file >> type; file.close();
   switch(type){
   case IO::MYFACETRACKER: 

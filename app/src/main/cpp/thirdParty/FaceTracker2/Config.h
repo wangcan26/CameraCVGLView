@@ -43,6 +43,9 @@ public:
 
     std::string GetParamsPathName();
 
+public:
+    static int kFramesUtilResetWhenOutsideFrame;
+
 private:
     static Configure *kSingleton;
 

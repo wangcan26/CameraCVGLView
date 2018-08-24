@@ -1,6 +1,9 @@
 #include <assert.h>
 #include "Config.h"
 
+Configure *Configure::kSingleton = 0;
+int  Configure::kFramesUtilResetWhenOutsideFrame = 50;
+
 Configure::Configure() {
     kSingleton = 0;
     assert(!kSingleton);
@@ -29,9 +32,9 @@ void Configure::Init(const std::string &path) {
 }
 
 std::string Configure::GetModelPathName() {
-    return path_+"face.mytrackparams.binary";
+    return path_+"/face.mytracker.binary";
 }
 
 std::string Configure::GetParamsPathName() {
-    return path_ + "face.mytracker.binary";
+    return path_ + "/face.mytrackerparams.binary";
 }

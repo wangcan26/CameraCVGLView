@@ -1,5 +1,6 @@
 #include <opencv2/imgproc.hpp>
 #include <chrono>
+#include <Config.h>
 #include "nvapp.h"
 #include "nvtracker.h"
 #include "nvrenderer.h"
@@ -26,7 +27,10 @@ namespace nv
                 pop_(false),
                 is_pause_(false),
                 timestamp_(0.0),
-                cam_configured_(false)
+                cam_configured_(false),
+                tracker_object_(0),
+                tracker_params_(0),
+                tracking_health_threshold(0.65)
         {
 
         }
@@ -245,8 +249,11 @@ namespace nv
 
 
         void NVTracker::_ProcessIO(const std::string& path) {
-
-
+            Configure::GetSingleton().Init(path);
+            tracker_object_ = FACETRACKER::LoadFaceTracker(Configure::GetSingleton().GetModelPathName().c_str());
+            tracker_params_ = FACETRACKER::LoadFaceTrackerParams(Configure::GetSingleton().GetParamsPathName().c_str());
+            assert(tracker_object_);
+            assert(tracker_params_);
         }
 
 
@@ -257,12 +264,17 @@ namespace nv
                 msg_ = MSG_WAIT_READY;
             msg_lk.unlock();
 
-
             //Read files into tracker
             _ProcessIO(app_path_);
 
+            tracking_quality_ = 0.0;
+            tracking_quality_decision_ = false;
+            int face_out_of_frame_count = 0;
 
             cv::Mat gray;
+            tracker_object_->Reset();
+
+            is_face_out_of_frame_ = false;
 
             while(start_)
             {
@@ -270,13 +282,65 @@ namespace nv
                 if(!_Capture(gray)) {
                     continue;
                 }
-                cv::flip(gray, gray, 0);
+
 
                 if(!is_pause_)
                 {
+
+                    cv::flip(gray, gray, 0);
+                    int health = tracker_object_->Track(gray, tracker_params_);
+                    tracking_quality_ = health/10.0;
+
+                    if(health == FACETRACKER::FaceTracker::TRACKER_FACE_OUT_OF_FRAME){
+                        face_out_of_frame_count++;
+                    }else face_out_of_frame_count = 0;
+
+                    is_face_out_of_frame_ = face_out_of_frame_count >0;
+
+                    tracking_quality_decision_ = ((tracking_quality_ > tracking_health_threshold)
+                        || ( (health == FACETRACKER::FaceTracker::TRACKER_FACE_OUT_OF_FRAME)&&
+                            (face_out_of_frame_count <= Configure::kFramesUtilResetWhenOutsideFrame)));
+
+
+
+
                     if(app_->Render() != 0)
                     {
                         app_->Render()->SyncTracker();
+                    }
+
+                    if(!tracking_quality_decision_){
+                        std::vector<float> points;
+                        points.clear();
+                        LOG_INFO("NVTracker FaceTracker Track Result false ....");
+                        if(app_->Render() != 0)
+                        {
+                            app_->Render()->OnReceivePointCloud(points);
+                            app_->Render()->StopSync();
+                        }
+                        tracker_object_->Reset();
+                        face_out_of_frame_count = 0;
+
+                    }else{
+                        LOG_INFO("NVTracker FaceTracker Track Result true .... %d, %d", tracker_object_->_shape.cols, tracker_object_->_shape.rows);
+
+                        std::vector<float> points;
+                        int n = tracker_object_->_shape.rows/2;
+                        for(int i = 0; i < n; i++)
+                        {
+                            float x = 2*tracker_object_->_shape.at<double>(0, i)/gray.cols -1;
+                            float y = 1 - 2*tracker_object_->_shape.at<double>(0, i+n)/gray.rows;
+
+                            points.push_back(x);
+                            points.push_back(y);
+                        }
+
+                        if(app_->Render() != 0)
+                        {
+                            app_->Render()->OnReceivePointCloud(points);
+                            app_->Render()->StartSync();
+                        }
+
                     }
 
                     if(pop_)

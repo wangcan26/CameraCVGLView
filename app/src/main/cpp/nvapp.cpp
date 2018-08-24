@@ -1,3 +1,4 @@
+#include <Config.h>
 #include "nvapp.h"
 #include "nvrenderer.h"
 #include "nvtracker.h"
@@ -18,6 +19,7 @@ namespace nv
     }
 
     void NVApp::Init(const std::string &path) {
+        Configure *configure = new Configure();
         renderer_ = new render::NVRenderer(this);
         tracker_ = new tracker::NVTracker(this, path);
         CreateGLThread();

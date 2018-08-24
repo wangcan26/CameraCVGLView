@@ -236,6 +236,7 @@ namespace nv
         }
 
        void NVRenderer::SyncTracker() {
+           std::lock_guard<std::mutex> sync_lk(sync_mut_);
            sync_tracker_ = true;
        }
 
@@ -370,7 +371,9 @@ namespace nv
             if(sync_tracker_ || !is_sync_)
             {
                 android_app_update_tex_image();
+                std::unique_lock<std::mutex> sync_lk(sync_mut_);
                 sync_tracker_ = false;
+                sync_lk.unlock();
             }
             if(cam_background_ != 0)
                 cam_background_->Render(flip_background_);

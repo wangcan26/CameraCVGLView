@@ -3,6 +3,7 @@
 #include <thread>
 #include <condition_variable>
 #include <opencv2/highgui.hpp>
+#include <tracker/FaceTracker.hpp>
 
 
 namespace nv
@@ -100,8 +101,12 @@ namespace nv
             bool       cam_configured_;
 
             // Related args about tracker
-
-
+            FACETRACKER::FaceTracker        *tracker_object_;
+            FACETRACKER::FaceTrackerParams  *tracker_params_;
+            bool                            tracking_quality_decision_;
+            float                           tracking_quality_;
+            float                           tracking_health_threshold;
+            bool                            is_face_out_of_frame_;
         };
     }
 }
