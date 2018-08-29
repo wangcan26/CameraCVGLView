@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
@@ -27,6 +28,11 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.renderscript.Allocation;
+import android.renderscript.Element;
+import android.renderscript.RenderScript;
+import android.renderscript.ScriptIntrinsicYuvToRGB;
+import android.renderscript.Type;
 import android.support.annotation.NonNull;
 import android.support.v4.app.NavUtils;
 import android.support.v4.content.ContextCompat;
@@ -37,6 +43,7 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.WindowManager;
 import android.widget.ImageView;
 
 import java.io.ByteArrayOutputStream;
@@ -85,6 +92,14 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     private HandlerThread       mCaptureThread;
     private Handler             mCaptureHandler;
 
+    private RenderScript        mRenderScript;
+    private Allocation          mAllocation;
+    private Allocation          mPrevAllocation;
+    private Allocation          mAllocationOut;
+    private ScriptIntrinsicYuvToRGB  mSCRgbConverter;
+    private ScriptC_yuv2rgb      mScriptCRgbConverter;
+    private ScriptC_rotatergb    mScriptCRgbRotater;
+
     // Durations in nanoseconds
     private static final long MICRO_SECOND = 1000;
     private static final long MILLI_SECOND = MICRO_SECOND * 1000;
@@ -98,7 +113,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private Size                mPreviewSize;
     private int mWidth,  mHeight;
-
 
     public static int IMAGE_WIDTH = 640, IMAGE_HEIGHT= 480;
     public static final String CAMERA_FACE_BACK = "" + CameraCharacteristics.LENS_FACING_BACK;
@@ -129,6 +143,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             {
                 e.printStackTrace();
             }
+
         }
 
         @Override
@@ -140,7 +155,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
         @Override
         public void onClosed(@NonNull CameraDevice camera) {
-
             Log.i("CameraRenderView", "CameraRenderView CameraDevice begin");
             mCamera = null;
             mCameraId = null;
@@ -150,18 +164,13 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             {
                 mThreadLock.notify();
             }
-
             Log.i("CameraRenderView", "CameraRenderView CameraDevice closed");
-
         }
 
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int i) {
             Log.i("CameraRenderView", "CameraRenderView CameraDevice Error");
-
         }
-
-
 
     };
 
@@ -173,18 +182,16 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mCaptureSession = cameraCaptureSession;
 
             try{
-
                 Log.i("CameraRenderView", "CameraRenderView createCaptureSession");
                 mPreviewBuilder = mCamera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
                 //Set Surface of SurfaceView as the target of the builder
                 if(DIRECT_TO_VIEW)
                 {
                     mPreviewBuilder.addTarget(mSurfaceHolder.getSurface());
-
                 }else{
                     mPreviewBuilder.addTarget(mSurface);
                 }
-                mPreviewBuilder.addTarget(mImageReader.getSurface());
+                mPreviewBuilder.addTarget(mAllocation.getSurface());
 
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
@@ -193,9 +200,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 mPreviewBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, ONE_SECOND/30);
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
 
-                //int rotation = ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
-                //Log.i("CameraRenderView", "CameraRenderView CameraCaptureSession " + rotation);
-                //mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+                int rotation = ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
+                Log.i("CameraRenderView", "CameraRenderView CameraCaptureSession " + getOrientation(rotation));
+                mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
                 startPreview(mCaptureSession);
 
             }catch (CameraAccessException e){
@@ -276,6 +283,31 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         }
     };
 
+    private Bitmap mBitmap = Bitmap.createBitmap(IMAGE_WIDTH, IMAGE_HEIGHT, Bitmap.Config.ARGB_8888);
+    private Bitmap mRotateBitmap;
+    private long   mLastTime = System.currentTimeMillis();
+
+    private final Allocation.OnBufferAvailableListener  mAlloBufferListener = new Allocation.OnBufferAvailableListener() {
+        @Override
+        public void onBufferAvailable(Allocation allocation) {
+
+            mAllocation.ioReceive();
+            mScriptCRgbConverter.forEach_yuvToRgb(mAllocationOut);
+            int actualSize = mAllocationOut.getBytesSize();
+            byte[] data = new byte[actualSize];
+            mAllocationOut.copyTo(data);
+
+            ByteBuffer buffer = ByteBuffer.wrap(data);
+            mBitmap.copyPixelsFromBuffer(buffer);
+            mRotateBitmap = rotate(mBitmap, mSensorOrientation);
+            long curTime = System.currentTimeMillis();
+            Log.i("CameraRenderView", "CameraRenderView Allocation OnBufferAvaiable " + (curTime-last_time));
+            last_time = curTime;
+            if(mRotateBitmap != null)
+                ((MainActivity)mWeakActivity.get()).testImage(mRotateBitmap);
+        }
+    };
+
     static {
         System.loadLibrary("nvision_core");
     }
@@ -301,6 +333,9 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         //Create a App
         nativeCreateApp(activity.getExternalFilesDir(null).getPath());
 
+        mRenderScript = RenderScript.create(activity);
+
+
     }
 
     public void onResume()
@@ -319,6 +354,10 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     public void deinit()
     {
         nativeDestroyApp();
+        if(mRenderScript != null){
+            mRenderScript.destroy();
+            mRenderScript = null;
+        }
     }
 
     @Override
@@ -373,7 +412,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             }
         }
 
-        destroyImageReader();
+       // destroyImageReader();
+        destroyAllocation();
         stopCameraSessionThread();
 
         //Release GL Resources
@@ -492,16 +532,17 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 mSurface = new Surface(mSurfaceTexture);
             }
             startImageWorkerThread();
-            createImageReader();
+            //createImageReader();
+            createAllocation();
 
             List<Surface> outputs = null;
             if(DIRECT_TO_VIEW)
             {
                 outputs = Arrays.asList(
-                        mSurfaceHolder.getSurface(), mImageReader.getSurface());
+                        mSurfaceHolder.getSurface(), mAllocation.getSurface());
             }else{
                 outputs = Arrays.asList(
-                        mSurface, mImageReader.getSurface());
+                        mSurface, mAllocation.getSurface());
             }
 
             mCamera.createCaptureSession(outputs, mSessionStateCallback, mCamSessionHandler);
@@ -668,7 +709,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 mPreviewSize = chooseBigEnoughSize(map.getOutputSizes(SurfaceHolder.class),
                         rotatedPreviewWidth, rotatedPreviewHeight);
             }else{
-                mPreviewSize = chooseBigEnoughSize(map.getOutputSizes(SurfaceTexture.class),
+                mPreviewSize = chooseBigEnoughSize(map.getOutputSizes(Allocation.class),
                         rotatedPreviewWidth, rotatedPreviewHeight);
             }
 
@@ -701,6 +742,8 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
 
+
+
     boolean isHardwareLevelSupported(CameraCharacteristics c, int requiredLevel) {
         final int[] sortedHwLevels = {
                 CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY,
@@ -728,7 +771,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     {
         mImageReader = ImageReader.newInstance(IMAGE_WIDTH, IMAGE_HEIGHT,ImageFormat.YUV_420_888, 2);
         mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mCamSessionHandler);//mImageSessionHandler
-
     }
 
     private void destroyImageReader()
@@ -738,6 +780,57 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mImageReader.setOnImageAvailableListener(null, mCamSessionHandler);
             mImageReader.close();
             mImageReader = null;
+        }
+    }
+
+    private void createAllocation()
+    {
+        Element elementYuv = Element.YUV(mRenderScript);
+        Type.Builder yuvBuilder = new Type.Builder(mRenderScript, elementYuv);
+        yuvBuilder.setYuvFormat(ImageFormat.YUV_420_888);
+        yuvBuilder.setX(IMAGE_WIDTH);
+        yuvBuilder.setY(IMAGE_HEIGHT);
+
+        mAllocation = Allocation.createTyped(mRenderScript, yuvBuilder.create(),
+                Allocation.USAGE_SCRIPT | Allocation.USAGE_IO_INPUT);
+        mAllocation.setOnBufferAvailableListener(mAlloBufferListener);
+
+        mSCRgbConverter = ScriptIntrinsicYuvToRGB.create(mRenderScript, elementYuv);
+        mSCRgbConverter.setInput(mAllocation);
+
+        //YUV to RGB intrinsic only works with U8_4
+        Element elementRgb = Element.RGBA_8888(mRenderScript);
+        Type.Builder rgbBuilder = (new Type.Builder(mRenderScript, elementRgb)).setX(IMAGE_WIDTH)
+                .setY(IMAGE_HEIGHT);
+        mPrevAllocation = Allocation.createTyped(mRenderScript, rgbBuilder.create(), Allocation.USAGE_SCRIPT);
+        mAllocationOut = Allocation.createTyped(mRenderScript, rgbBuilder.create(), Allocation.USAGE_SCRIPT);
+
+        mScriptCRgbConverter = new ScriptC_yuv2rgb(mRenderScript);
+        mScriptCRgbConverter.set_gIn(mAllocation);
+        mScriptCRgbConverter.set_width(IMAGE_WIDTH);
+        mScriptCRgbConverter.set_height(IMAGE_HEIGHT);
+
+        mScriptCRgbRotater = new ScriptC_rotatergb(mRenderScript);
+        mScriptCRgbRotater.set_gIn(mAllocationOut);
+        mScriptCRgbRotater.set_width(IMAGE_WIDTH);
+        mScriptCRgbRotater.set_height(IMAGE_HEIGHT);
+        mScriptCRgbRotater.set_degree(90);
+
+    }
+
+
+    private void destroyAllocation()
+    {
+        if(mAllocation != null){
+            mAllocation.setOnBufferAvailableListener(null);
+            mAllocation.destroy();
+            mAllocation = null;
+        }
+
+        if(mAllocationOut != null)
+        {
+            mAllocationOut.destroy();
+            mAllocationOut = null;
         }
     }
 
@@ -774,6 +867,15 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             mSurface.release();
             mSurface = null;
         }
+    }
+
+
+    private int getOrientation(int rotation) {
+        // Sensor orientation is 90 for most devices, or 270 for some devices (eg. Nexus 5X)
+        // We have to take that into account and rotate JPEG properly.
+        // For devices with orientation of 90, we simply return our mapping from ORIENTATIONS.
+        // For devices with orientation of 270, we need to rotate the JPEG 180 degrees.
+        return (ORIENTATIONS.get(rotation) + mSensorOrientation + 270) % 360;
     }
 
     private Activity getActivity()
@@ -832,6 +934,37 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
             return choices[0];
         }
     }
+
+    private static byte[] rotate(byte[] data, int degrees) {
+        if (data == null) throw new NullPointerException();
+        // Convert the byte data into a Bitmap
+        Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length);
+        // Getting the rotated Bitmap
+        Bitmap rotatedBmp = rotate(bmp, degrees);
+        // Get the byte array from the Bitmap
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        rotatedBmp.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+        return stream.toByteArray();
+    }
+
+    private static Bitmap rotate(Bitmap bmp, int degrees) {
+        if (bmp == null) throw new NullPointerException();
+
+        // getting scales of the image
+        int width = bmp.getWidth();
+        int height = bmp.getHeight();
+
+        // Creating a Matrix and rotating it to 90 degrees
+        Matrix matrix = new Matrix();
+        matrix.postRotate(degrees);
+
+        // Getting the rotated Bitmap
+        Bitmap rotatedBmp = Bitmap.createBitmap(bmp, 0, 0, width, height, matrix, true);
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        rotatedBmp.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+        return rotatedBmp;
+    }
+
 
     //http://www.mclover.cn/blog/index.php/archives/206.html
     private static Bitmap imageToBitmap(Image image)
@@ -1037,7 +1170,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
     }
 
 
-    public static byte[] rotateYUV420Degree270(byte[] data, int imageWidth,
+    private static byte[] rotateYUV420Degree270(byte[] data, int imageWidth,
                                                int imageHeight) {
         byte[] yuv = new byte[imageWidth * imageHeight * 3 / 2];
         int nWidth = 0, nHeight = 0;
@@ -1102,7 +1235,7 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         return yuv;
     }
 
-    public static byte[] rotateYUV420Degree90(byte[] data, int imageWidth, int imageHeight) {
+    private static byte[] rotateYUV420Degree90(byte[] data, int imageWidth, int imageHeight) {
         byte[] yuv = new byte[imageWidth * imageHeight * 3 / 2]; //
         // Rotate the Y luma
         int i = 0;

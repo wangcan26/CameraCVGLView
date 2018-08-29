@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -39,10 +40,7 @@ public class MainActivity extends Activity {
     private CameraRenderView mCameraView;
     private ImageView        mImageView;
     private Bitmap           mTestBitmap;
-
-    private HandlerThread       mTestMatThread;
-    private Handler             mTestMatHandler;
-    public static final int     MSG_TEST_MAT = 0;
+    private boolean          mIsTestImage;
 
     public enum LIFECYCLE_ORDER{
         CREATE,
@@ -51,12 +49,10 @@ public class MainActivity extends Activity {
         DESTROY
     }
     public static LIFECYCLE_ORDER kOrder;
-
     public static boolean ACTIVITY_INIT = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
 
         if(ACTIVITY_INIT) {
@@ -69,7 +65,6 @@ public class MainActivity extends Activity {
 
         //First you should copy assets to sdcard
         copyAssets();
-
         final ExecutorService executorService = Executors.newCachedThreadPool();
 
         //CameraRenderView
@@ -77,7 +72,8 @@ public class MainActivity extends Activity {
         mCameraView.init(this);
         //ImageView Test for mat
         mImageView = (ImageView) findViewById(R.id.image_view);
-
+        mIsTestImage = false;
+        mTestBitmap = Bitmap.createBitmap(IMAGE_WIDTH, IMAGE_HEIGHT, Bitmap.Config.ARGB_8888);
 
         //Call in a thread that different from ImageReader Callback
         Button capture_button = (Button)findViewById(R.id.capture);
@@ -85,7 +81,7 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View view) {
                 Log.i("MainActivity", "MainActivity ");
-                executorService.execute(new Runnable() {
+                /*executorService.execute(new Runnable() {
                     @Override
                     public void run() {
                         Log.i("MainActivity", "MainActivity Exectutor process testMat");
@@ -103,12 +99,46 @@ public class MainActivity extends Activity {
                             }
                         });
                     }
-                });
+                });*/
+                mIsTestImage = true;
             }
         });
         kOrder  = LIFECYCLE_ORDER.CREATE;
         ACTIVITY_INIT = true;
         Log.i("MainActivity", "MainActivity Lifecycle onCreate");
+    }
+
+    public void testImage(final byte[] data)
+    {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Log.i("MainActivity", "MainActivity onCreate mImageView set ImageBitmap");
+                //if(mIsTestImage)
+                //{
+                    ByteBuffer buffer = ByteBuffer.wrap(data);
+                    mTestBitmap.copyPixelsFromBuffer(buffer);
+
+                    mImageView.setImageBitmap(mTestBitmap);
+                    mIsTestImage = false;
+                //}
+
+            }
+        });
+    }
+
+    public void testImage(final  Bitmap bitmap)
+    {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+
+                mImageView.setImageBitmap(bitmap);
+                mIsTestImage = false;
+
+
+            }
+        });
     }
 
     @Override
