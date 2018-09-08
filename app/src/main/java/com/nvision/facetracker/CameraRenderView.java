@@ -94,7 +94,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private RenderScript        mRenderScript;
     private Allocation          mAllocation;
-    private Allocation          mPrevAllocation;
     private Allocation          mAllocationOut;
     private ScriptIntrinsicYuvToRGB  mSCRgbConverter;
     private ScriptC_yuv2rgb      mScriptCRgbConverter;
@@ -199,10 +198,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
                 mPreviewBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, 0);
                 mPreviewBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, ONE_SECOND/30);
                 mPreviewBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, 0);
-
-                int rotation = ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
-                Log.i("CameraRenderView", "CameraRenderView CameraCaptureSession " + getOrientation(rotation));
-                mPreviewBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
                 startPreview(mCaptureSession);
 
             }catch (CameraAccessException e){
@@ -569,7 +564,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
 
     private  void startPreview(final CameraCaptureSession session) throws CameraAccessException{
         session.setRepeatingRequest(mPreviewBuilder.build(), mSessionCaptureCallback, mUIHandler); //Must mCamSessionHandler
-
         Log.i("CameraRenderView", "CameraRenderView startPreview ...");
     }
 
@@ -802,7 +796,6 @@ public class CameraRenderView extends SurfaceView implements SurfaceHolder.Callb
         Element elementRgb = Element.RGBA_8888(mRenderScript);
         Type.Builder rgbBuilder = (new Type.Builder(mRenderScript, elementRgb)).setX(IMAGE_WIDTH)
                 .setY(IMAGE_HEIGHT);
-        mPrevAllocation = Allocation.createTyped(mRenderScript, rgbBuilder.create(), Allocation.USAGE_SCRIPT);
         mAllocationOut = Allocation.createTyped(mRenderScript, rgbBuilder.create(), Allocation.USAGE_SCRIPT);
 
         mScriptCRgbConverter = new ScriptC_yuv2rgb(mRenderScript);
